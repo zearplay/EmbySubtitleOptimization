@@ -235,5 +235,11 @@ namespace EmbySubtitleOptimization.Subtitles
             assAlpha = (255 - alpha).ToString("X2", CultureInfo.InvariantCulture);
             return (blue + green + red).ToUpperInvariant();
         }
+
+        internal static string ToAssStyleColor(string htmlColor)
+        {
+            var assColor = ToAssColor(htmlColor, out var assAlpha);
+            return "&H" + assAlpha + assColor;
+        }
     }
 }

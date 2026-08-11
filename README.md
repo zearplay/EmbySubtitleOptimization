@@ -2,9 +2,9 @@
 
 ## 安装文件
 
-- 版本：`0.26.0`
+- 版本：`0.27.0`
 - 文件：[EmbySubtitleOptimization.dll](artifacts/plugin/EmbySubtitleOptimization.dll)
-- SHA-256：`832849140d039cb9ac7e6ea7dc612243ea8019d2a0f774d71317fef77c79256c`
+- SHA-256：`d916d67a2af5e50c5e8efab675abac76a1d09f3cef4460d33b9472c549a80e70`
 
 ## 安装方式
 

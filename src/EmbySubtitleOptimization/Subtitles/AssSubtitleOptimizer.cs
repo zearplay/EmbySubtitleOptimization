@@ -20,7 +20,7 @@ namespace EmbySubtitleOptimization.Subtitles
             var scriptWidth = ReadScriptResolution(lines, "PlayResX", profile.Width);
             var scriptHeight = ReadScriptResolution(lines, "PlayResY", profile.Height);
             var styleFontSizes = ReadStyleFontSizes(lines);
-            NormalizeStyleFields(lines);
+            NormalizeStyleFields(lines, options);
             var eventSection = false;
             var textIndex = 9;
             var styleIndex = 3;
@@ -205,7 +205,7 @@ namespace EmbySubtitleOptimization.Subtitles
             return result;
         }
 
-        private static void NormalizeStyleFields(IList<string> lines)
+        private static void NormalizeStyleFields(IList<string> lines, PluginOptions options)
         {
             var styleSection = false;
             List<string> outputFields = null;
@@ -264,9 +264,35 @@ namespace EmbySubtitleOptimization.Subtitles
                 var outputValues = new string[outputFields.Count];
                 for (var fieldIndex = 0; fieldIndex < outputFields.Count; fieldIndex++)
                 {
-                    if (outputFields[fieldIndex].Equals(borderColorField, StringComparison.OrdinalIgnoreCase))
+                    if (outputFields[fieldIndex].Equals("Fontname", StringComparison.OrdinalIgnoreCase))
                     {
-                        outputValues[fieldIndex] = "&H00000000";
+                        outputValues[fieldIndex] = options.PrimaryFontName;
+                    }
+                    else if (outputFields[fieldIndex].Equals("Fontsize", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var sourceIndex = sourceIndices[fieldIndex];
+                        var sourceValue = sourceIndex >= 0 && sourceIndex < values.Length ? values[sourceIndex] : string.Empty;
+                        outputValues[fieldIndex] = ResolvePrimaryStyleFontSize(sourceValue, options);
+                    }
+                    else if (outputFields[fieldIndex].Equals("PrimaryColour", StringComparison.OrdinalIgnoreCase))
+                    {
+                        outputValues[fieldIndex] = SubtitleStyleFormatter.ToAssStyleColor(options.PrimarySubtitleColor);
+                    }
+                    else if (outputFields[fieldIndex].Equals("Bold", StringComparison.OrdinalIgnoreCase))
+                    {
+                        outputValues[fieldIndex] = IsBold(options.PrimaryFontStyle) ? "-1" : "0";
+                    }
+                    else if (outputFields[fieldIndex].Equals("Italic", StringComparison.OrdinalIgnoreCase))
+                    {
+                        outputValues[fieldIndex] = IsItalic(options.PrimaryFontStyle) ? "-1" : "0";
+                    }
+                    else if (outputFields[fieldIndex].Equals("Spacing", StringComparison.OrdinalIgnoreCase))
+                    {
+                        outputValues[fieldIndex] = options.PrimaryCharacterSpacing.ToString("0.##", CultureInfo.InvariantCulture);
+                    }
+                    else if (outputFields[fieldIndex].Equals(borderColorField, StringComparison.OrdinalIgnoreCase))
+                    {
+                        outputValues[fieldIndex] = SubtitleStyleFormatter.ToAssStyleColor(options.PrimaryBorderColor);
                     }
                     else if (outputFields[fieldIndex].Equals("BorderStyle", StringComparison.OrdinalIgnoreCase))
                     {
@@ -274,7 +300,9 @@ namespace EmbySubtitleOptimization.Subtitles
                     }
                     else if (outputFields[fieldIndex].Equals("Outline", StringComparison.OrdinalIgnoreCase))
                     {
-                        outputValues[fieldIndex] = "0.1";
+                        outputValues[fieldIndex] = options.PrimaryBorderEnabled
+                            ? Math.Max(0, options.PrimaryBorderWidth).ToString("0.##", CultureInfo.InvariantCulture)
+                            : "0";
                     }
                     else
                     {
@@ -285,6 +313,29 @@ namespace EmbySubtitleOptimization.Subtitles
 
                 lines[index] = "Style: " + string.Join(",", outputValues);
             }
+        }
+
+        private static string ResolvePrimaryStyleFontSize(string sourceValue, PluginOptions options)
+        {
+            var baseFontSize = options.CommonFontSize;
+            if (baseFontSize <= 0
+                && !double.TryParse(sourceValue, NumberStyles.Float, CultureInfo.InvariantCulture, out baseFontSize))
+            {
+                return sourceValue;
+            }
+
+            var resolved = Math.Max(1, Math.Round(baseFontSize * options.PrimaryFontSizePercent / 100.0, 2));
+            return resolved.ToString("0.##", CultureInfo.InvariantCulture);
+        }
+
+        private static bool IsBold(SubtitleFontStyle fontStyle)
+        {
+            return fontStyle == SubtitleFontStyle.Bold || fontStyle == SubtitleFontStyle.BoldItalic;
+        }
+
+        private static bool IsItalic(SubtitleFontStyle fontStyle)
+        {
+            return fontStyle == SubtitleFontStyle.Italic || fontStyle == SubtitleFontStyle.BoldItalic;
         }
 
         private static void EnsureStyleField(ICollection<string> outputFields, ICollection<int> sourceIndices, string fieldName)

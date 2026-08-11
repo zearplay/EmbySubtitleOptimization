@@ -208,7 +208,7 @@ namespace EmbySubtitleOptimization.Tests
             var options = new PluginOptions { MaxLineWidth1080P = 20, CommonFontSize = 0, BilingualLineSpacing = 0 };
             var output = AssSubtitleOptimizer.Optimize(ass, ResolutionProfile.FromVideo(1920, 1080, options), options, "test-marker");
             True(output.Contains("逗号,"), "comma in ASS text is preserved");
-            True(output.Contains("Style: Default,Arial,33,"), "ASS Style Fontsize is preserved");
+            True(output.Contains("Style: Default,Source Han Sans SC,33,"), "ASS Style uses the configured primary font and inherited Fontsize");
             True(!output.Contains("SecondaryColour") && !output.Contains("BackColour"), "unused ASS color effect fields are removed");
             True(!output.Contains("ScaleX") && !output.Contains("ScaleY"), "ASS scale fields are removed");
             True(!output.Contains("Shadow"), "ASS shadow field is removed");
@@ -216,6 +216,12 @@ namespace EmbySubtitleOptimization.Tests
             var styleFields = styleFormat.Substring(7).Split(',').Select(value => value.Trim()).ToArray();
             var styleLine = output.Split('\n').Single(line => line.StartsWith("Style: Default,", StringComparison.Ordinal));
             var styleValues = styleLine.Substring(7).Split(',');
+            Equal("Source Han Sans SC", styleValues[Array.IndexOf(styleFields, "Fontname")], "ASS Style provides an Infuse-compatible primary font fallback");
+            Equal("33", styleValues[Array.IndexOf(styleFields, "Fontsize")], "ASS Style provides an Infuse-compatible primary Fontsize fallback");
+            Equal("&H00FFFFFF", styleValues[Array.IndexOf(styleFields, "PrimaryColour")], "ASS Style provides an Infuse-compatible primary color fallback");
+            Equal("-1", styleValues[Array.IndexOf(styleFields, "Bold")], "ASS Style provides an Infuse-compatible primary bold fallback");
+            Equal("0", styleValues[Array.IndexOf(styleFields, "Italic")], "ASS Style provides an Infuse-compatible primary italic fallback");
+            Equal("0", styleValues[Array.IndexOf(styleFields, "Spacing")], "ASS Style provides an Infuse-compatible primary spacing fallback");
             Equal("&H00000000", styleValues[Array.IndexOf(styleFields, "OutlineColour")], "ASS border color is forced to black");
             Equal("1", styleValues[Array.IndexOf(styleFields, "BorderStyle")], "ASS border style is forced to normal outline");
             Equal("0.1", styleValues[Array.IndexOf(styleFields, "Outline")], "ASS fallback border width is forced to 0.1");
@@ -337,7 +343,7 @@ namespace EmbySubtitleOptimization.Tests
                 var processor = new SubtitleFileProcessor();
                 var options = new PluginOptions();
                 True(processor.Process(source, target, 3840, 2160, options).Changed, "first file processing writes output");
-                True(File.ReadAllText(target).Contains("revision=19"), "file marker records processing revision");
+                True(File.ReadAllText(target).Contains("revision=20"), "file marker records processing revision");
                 True(File.ReadAllText(target).Contains("profile=4K"), "file marker records resolution profile");
                 True(!processor.Process(source, target, 3840, 2160, options).Changed, "unchanged file is skipped");
 
