@@ -58,16 +58,14 @@ namespace EmbySubtitleOptimization
         [Description("将 SRT 转换为带自适应样式的 ASS 副本。")]
         public bool EnableSrt { get; set; }
 
-        [DisplayName("1080p 最大行宽")]
-        [Description("按显示宽度单位计算；汉字通常占 2 个单位，拉丁字母通常占 1 个单位。")]
+        [DisplayName("1920×1080 基准每行最大字符宽度")]
+        [Description("只需设置 1920×1080 横屏的基准值。修改此值后，所有横屏分辨率都会按照实际横向分辨率相对于 1920 像素的比例重新计算；竖屏直接使用基准值。")]
         public int MaxLineWidth1080P { get; set; }
 
-        [DisplayName("2K 最大行宽")]
-        [Description("适用于高度高于 1080、但不高于 1600 像素的视频。")]
+        [Browsable(false)]
         public int MaxLineWidth2K { get; set; }
 
-        [DisplayName("4K 最大行宽")]
-        [Description("适用于高度高于 1600 像素的视频。")]
+        [Browsable(false)]
         public int MaxLineWidth4K { get; set; }
 
         [DisplayName("Fontsize")]
@@ -185,8 +183,6 @@ namespace EmbySubtitleOptimization
         protected override void Validate(ValidationContext context)
         {
             ValidateWidth(context, nameof(MaxLineWidth1080P), MaxLineWidth1080P);
-            ValidateWidth(context, nameof(MaxLineWidth2K), MaxLineWidth2K);
-            ValidateWidth(context, nameof(MaxLineWidth4K), MaxLineWidth4K);
 
             if (CommonFontSize != 0 && (CommonFontSize < 6 || CommonFontSize > 300))
             {

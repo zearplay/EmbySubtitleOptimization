@@ -29,9 +29,60 @@ namespace EmbySubtitleOptimization.Tests
         private static void TestResolutionProfiles()
         {
             var options = new PluginOptions();
-            Equal("1080p", ResolutionProfile.FromVideo(1920, 1080, options).Name, "1080p profile");
-            Equal("2K", ResolutionProfile.FromVideo(2560, 1440, options).Name, "2K profile");
-            Equal("4K", ResolutionProfile.FromVideo(3840, 2160, options).Name, "4K profile");
+            var profile1080P = ResolutionProfile.FromVideo(1920, 1080, options);
+            var profile1440P = ResolutionProfile.FromVideo(2560, 1440, options);
+            var profile2160P = ResolutionProfile.FromVideo(3840, 2160, options);
+            Equal("1080p", profile1080P.Name, "1080p profile");
+            Equal("2K", profile1440P.Name, "2K profile");
+            Equal("4K", profile2160P.Name, "4K profile");
+            var landscapeCases = new[]
+            {
+                (Name: "VGA", Width: 640, Height: 480, Expected: 13),
+                (Name: "SD", Width: 720, Height: 480, Expected: 15),
+                (Name: "SVGA", Width: 800, Height: 600, Expected: 17),
+                (Name: "XGA", Width: 1024, Height: 768, Expected: 21),
+                (Name: "SXGA", Width: 1280, Height: 1024, Expected: 27),
+                (Name: "HD", Width: 1280, Height: 720, Expected: 27),
+                (Name: "WXGA 16:10", Width: 1280, Height: 800, Expected: 27),
+                (Name: "WXGA 16:9", Width: 1366, Height: 768, Expected: 28),
+                (Name: "SXGA+", Width: 1400, Height: 1050, Expected: 29),
+                (Name: "UXGA", Width: 1600, Height: 1200, Expected: 33),
+                (Name: "FHD", Width: 1920, Height: 1080, Expected: 40),
+                (Name: "WUXGA", Width: 1920, Height: 1200, Expected: 40),
+                (Name: "UW-FHD", Width: 2560, Height: 1080, Expected: 53),
+                (Name: "QHD", Width: 2560, Height: 1440, Expected: 53),
+                (Name: "UW-QHD", Width: 3440, Height: 1440, Expected: 72),
+                (Name: "DFHD", Width: 3840, Height: 1080, Expected: 80),
+                (Name: "UHD 4K", Width: 3840, Height: 2160, Expected: 80),
+                (Name: "DCI 4K", Width: 4096, Height: 2160, Expected: 85),
+                (Name: "DQHD", Width: 5120, Height: 1440, Expected: 107),
+                (Name: "8K UHD", Width: 7680, Height: 4320, Expected: 160)
+            };
+            foreach (var resolution in landscapeCases)
+            {
+                Equal(
+                    resolution.Expected,
+                    ResolutionProfile.FromVideo(resolution.Width, resolution.Height, options).MaxLineWidth,
+                    resolution.Name + " landscape line-width adaptation");
+            }
+
+            var customBaseOptions = new PluginOptions { MaxLineWidth1080P = 60 };
+            foreach (var resolution in landscapeCases)
+            {
+                True(
+                    ResolutionProfile.FromVideo(resolution.Width, resolution.Height, customBaseOptions).MaxLineWidth != resolution.Expected,
+                    resolution.Name + " changes when the configured base line width changes");
+            }
+
+            Equal(60, ResolutionProfile.FromVideo(1920, 1080, customBaseOptions).MaxLineWidth, "custom base applies to 1920-wide screens");
+            Equal(80, ResolutionProfile.FromVideo(2560, 1440, customBaseOptions).MaxLineWidth, "custom base rescales 2560-wide screens");
+            Equal(120, ResolutionProfile.FromVideo(3840, 2160, customBaseOptions).MaxLineWidth, "custom base rescales 3840-wide screens");
+            Equal(240, ResolutionProfile.FromVideo(7680, 4320, customBaseOptions).MaxLineWidth, "custom base rescales 7680-wide screens");
+            Equal(60, ResolutionProfile.FromVideo(1080, 1920, customBaseOptions).MaxLineWidth, "portrait screen uses the changed base without scaling");
+
+            Equal(40, ResolutionProfile.FromVideo(1080, 1920, options).MaxLineWidth, "portrait screen keeps the configured base without proportional adaptation");
+            Equal(40, ResolutionProfile.FromVideo(720, 1280, options).MaxLineWidth, "smaller portrait screen also keeps the configured base");
+            Equal(40, ResolutionProfile.FromVideo(0, 2160, options).MaxLineWidth, "missing screen width uses the 1920-wide base");
             Equal(17d, options.CommonFontSize, "common Fontsize defaults to 17");
             Equal("Source Han Sans SC", options.PrimaryFontName, "primary font defaults to Source Han Sans SC");
             Equal(70, options.SecondaryFontSizePercent, "secondary Fontsize ratio defaults to 70 percent");
@@ -181,11 +232,11 @@ namespace EmbySubtitleOptimization.Tests
                 var processor = new SubtitleFileProcessor();
                 var options = new PluginOptions();
                 True(processor.Process(source, target, 3840, 2160, options).Changed, "first file processing writes output");
-                True(File.ReadAllText(target).Contains("revision=3"), "file marker records processing revision");
+                True(File.ReadAllText(target).Contains("revision=10"), "file marker records processing revision");
                 True(File.ReadAllText(target).Contains("profile=4K"), "file marker records resolution profile");
                 True(!processor.Process(source, target, 3840, 2160, options).Changed, "unchanged file is skipped");
 
-                options.MaxLineWidth4K++;
+                options.MaxLineWidth1080P++;
                 True(processor.Process(source, target, 3840, 2160, options).Changed, "settings change regenerates output");
             }
             finally

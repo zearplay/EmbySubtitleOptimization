@@ -1,3 +1,5 @@
+using System;
+
 namespace EmbySubtitleOptimization.Subtitles
 {
     internal sealed class ResolutionProfile
@@ -21,18 +23,32 @@ namespace EmbySubtitleOptimization.Subtitles
 
         public static ResolutionProfile FromVideo(int width, int height, PluginOptions options)
         {
-            if (height > 1600 || width > 2800)
+            var resolvedWidth = width > 0 ? width : 1920;
+            var resolvedHeight = height > 0 ? height : 1080;
+            var maxLineWidth = CalculateMaxLineWidth(width, height, options.MaxLineWidth1080P);
+
+            if (resolvedHeight > 1600 || resolvedWidth > 2800)
             {
-                return new ResolutionProfile("4K", width > 0 ? width : 3840, height > 0 ? height : 2160, options.MaxLineWidth4K, 84, 120);
+                return new ResolutionProfile("4K", resolvedWidth, resolvedHeight, maxLineWidth, 84, 120);
             }
 
-            if (height > 1080 || width > 1920)
+            if (resolvedHeight > 1080 || resolvedWidth > 1920)
             {
-                return new ResolutionProfile("2K", width > 0 ? width : 2560, height > 0 ? height : 1440, options.MaxLineWidth2K, 60, 80);
+                return new ResolutionProfile("2K", resolvedWidth, resolvedHeight, maxLineWidth, 60, 80);
             }
 
-            return new ResolutionProfile("1080p", width > 0 ? width : 1920, height > 0 ? height : 1080, options.MaxLineWidth1080P, 46, 60);
+            return new ResolutionProfile("1080p", resolvedWidth, resolvedHeight, maxLineWidth, 46, 60);
+        }
+
+        internal static int CalculateMaxLineWidth(int screenWidth, int screenHeight, int baseLineWidth)
+        {
+            if (screenWidth > 0 && screenHeight > 0 && screenWidth < screenHeight)
+            {
+                return baseLineWidth;
+            }
+
+            var effectiveWidth = screenWidth > 0 ? screenWidth : 1920;
+            return Math.Max(1, (int)Math.Round(baseLineWidth * effectiveWidth / 1920.0, MidpointRounding.AwayFromZero));
         }
     }
 }
-
