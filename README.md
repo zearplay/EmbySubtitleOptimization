@@ -1,126 +1,130 @@
 # Emby Subtitle Optimization
 
-Emby Subtitle Optimization 是一个 Emby Server 插件。插件优化外置 ASS、SSA 和 SRT 字幕的行宽、字体和双语排版。
+## 安装文件
 
-插件不会修改源字幕。计划任务会在视频目录中生成带 `.optimized.ass` 后缀的字幕副本。
+- 版本：`0.15.0`
+- 文件：[EmbySubtitleOptimization.dll](artifacts/plugin/EmbySubtitleOptimization.dll)
+- SHA-256：`52404fe72f6e86e63c179e764bf283807e6a4a361832d85eba00065b18b9cfc7`
 
-## 处理规则
+## 安装方式
 
-- 只需设置 1920×1080 横屏的基准每行最大字符宽度。其他横屏仅按照实际横向分辨率相对于 1920 像素的比例自动缩小或放大。竖屏不进行比例适配，直接使用基准值。
-- 汉字、日文假名和韩文字符通常按 2 个显示宽度单位计算；拉丁字母通常按 1 个单位计算。
-- 超过最大行宽的普通对白优先在空格或标点处换行。
-- 双语字幕不使用横向拉伸或压缩，也不会生成 `\fscx` 覆盖标签。
-- ASS/SSA 字幕以 Dialogue 对应 Style 的 `Fontsize` 为基准。主字幕和副字幕使用独立的字号比例，并分别生成 `\fs数字`。
-- 原有内联 `\fs`、`\fs+` 和 `\fs-` 会替换为插件计算出的主字幕或副字幕字号。
-- 单字幕直接按主字幕处理；主字幕和副字幕可分别设置字体颜色与字体风格。
-- 主字幕、副字幕和 SRT 转 ASS 默认字体使用固定的通用字体下拉框，不读取服务器载体字体。
-- 主字幕和副字幕可分别设置 ASS `Spacing`。插件使用 `\fsp` 写入字符间距。
-- 双字幕以第一行为主字幕、第二行为副字幕，并支持设置两行的上下间隔。
-- 字幕位置默认为“不修改原字幕位置”，保留 ASS/SSA 的 Style 对齐与边距、Dialogue 边距、`\pos` 和 `\move`。也可选择“最底部居中”，并设置距底部距离。
-- 含定位、移动、裁剪、绘图或卡拉 OK 标签的 ASS/SSA 事件保持不变。
-- SRT 字幕转换为 ASS 副本；转换后的默认字体可以单独选择。双语两行仍分别使用主字幕和副字幕字体。
+先在 Emby Server 控制台中打开服务器名称旁的三点菜单，然后查看服务器信息，确认实际数据目录。插件目录是数据目录下的 `plugins`。
 
-基准值为 40 时，指定横屏分辨率的适配结果如下：
+### 不同平台的插件目录
 
-| 标准 | 分辨率 | 每行最大字符宽度 |
-| --- | ---: | ---: |
-| VGA | 640×480 | 13 |
-| SD（480i/480p） | 720×480 | 15 |
-| SVGA | 800×600 | 17 |
-| XGA | 1024×768 | 21 |
-| SXGA | 1280×1024 | 27 |
-| HD / 720p | 1280×720 | 27 |
-| WXGA（16:10） | 1280×800 | 27 |
-| WXGA（16:9） | 1366×768 | 28 |
-| SXGA+ | 1400×1050 | 29 |
-| UXGA | 1600×1200 | 33 |
-| FHD / 1080p | 1920×1080 | 40 |
-| WUXGA | 1920×1200 | 40 |
-| UW-FHD | 2560×1080 | 53 |
-| QHD / WQHD / 2K | 2560×1440 | 53 |
-| UW-QHD | 3440×1440 | 72 |
-| DFHD | 3840×1080 | 80 |
-| UHD / 4K | 3840×2160 | 80 |
-| DCI 4K | 4096×2160 | 85 |
-| DQHD | 5120×1440 | 107 |
-| 8K UHD | 7680×4320 | 160 |
+| 平台 | 插件目录 |
+| --- | --- |
+| Windows | `C:\Users\{user}\AppData\Roaming\Emby-Server\programdata\plugins` |
+| macOS | `/Users/{user}/emby-server/plugins` 或 `/Users/{user}/.config/emby-server/plugins` |
+| Linux | `/var/lib/emby/plugins` |
+| Docker | 宿主机映射的 Emby Server 数据目录下的 `plugins`；以容器映射为准 |
+| Synology DSM 7 | `/volume1/@appdata/EmbyServer/plugins` |
+| Synology DSM 6 | `/volume1/Emby/plugins` |
+| QNAP | `/share/CACHEDEV1_DATA/.qpkg/EmbyServer/programdata/plugins`、`/share/HDA_DATA/.qpkg/EmbyServer/programdata/plugins` 或实际存储池路径 |
+| Asustor | `/home/emby/plugins` |
+| TerraMaster | `/home/emby/plugins` |
+| Western Digital | `/mnt/HD/HD_a2/emby/plugins` |
+| Thecus | `/raid/data/module/EmbyServer/programdata/plugins` |
+| Android | `/storage/emulated/0/Android/data/com.emby.embyserver/files/plugins` |
 
-横屏每行最大字符宽度的计算方式为“1920×1080 基准值 × 实际横向分辨率 ÷ 1920”，结果取最接近的整数。例如基准值为 40 时，横向分辨率为 640、2560、3440、4096 和 7680 像素时，计算结果分别为 13、53、72、85 和 160。无法读取横向分辨率时按 1920 像素计算。竖屏不执行该公式，直接使用 40。
+实际目录可能因安装包、NAS 存储池和容器映射而不同。服务器信息中显示的路径优先。
 
-设置中的基准值可以修改，`40` 不是固定值。保存新基准值后，所有横屏分辨率都会重新计算。例如基准值改为 60 时，1920×1080、2560×1440、3840×2160 和 7680×4320 的最大行宽分别变为 60、80、120 和 240；竖屏直接使用 60。
+### Windows
 
-SRT 转 ASS 的默认 Fontsize 仍由原有 1080p、2K 和 4K 分辨率档位决定，分别为 46、60 和 84。
-
-默认样式如下：
-
-| 字幕类型 | 字体 | 字体颜色 | 字体风格 |
-| --- | --- | --- | --- |
-| 主字幕（ASS/SSA 单字幕及双字幕第一行） | Source Han Sans SC | `#FFFFFF` | 粗体 |
-| 双字幕副字幕（第二行） | Arial | `#FFD966` | 常规 |
-| SRT 转 ASS 单字幕 | 可选的 SRT 默认字体 | `#FFFFFF` | 粗体 |
-
-字体颜色支持 `#RRGGBB` 和 `#AARRGGBB`。字体风格支持常规、粗体、斜体和粗斜体。`Spacing` 的可选范围为 -20 到 50，默认值为 0。双字幕上下间隔默认为 0，不添加额外间隔。
-
-主字幕 Fontsize 比例默认为 100%，副字幕 Fontsize 比例默认为 70%。例如 Style `Fontsize` 为 40 时，主字幕使用 `\fs40`，副字幕使用 `\fs28`。单字幕使用主字幕比例。
-
-插件保留 Dialogue 文本中的 `\r` 和 `\rStyle`，以免改变原字幕依赖 Style 的位置；随后重新应用对应主字幕或副字幕的 `\fs`、字体、颜色和字体风格，避免 Style 重置覆盖插件设置。
-
-“距最底部距离”仅在“最底部居中”模式下生效，默认值为 60。该数值以 1080p 字幕画布像素为基准，并按 ASS/SSA 的 `PlayResY` 或 SRT 转换画布高度同比例换算。
-
-生成标记包含处理修订号。插件的字幕改写逻辑升级后，下一次计划任务会自动重新生成旧的 `.optimized.ass` 文件。
-
-「通用设置」中的 Fontsize 默认为 17。值为 0 时，ASS/SSA 使用 Dialogue 对应 Style 的 `Fontsize`，SRT 根据视频分辨率使用默认字号。值大于 0 时，该值作为统一基础字号，再分别应用主字幕和副字幕比例。
-
-插件从主字幕和副字幕的内联覆盖块中移除 `\2c`、`\3c`、`\4c`、`\blur`、`\be`、`\shad`、`\xbord`、`\bord`、`\xshad` 和 `\yshad`。SRT 转 ASS 不生成描边和阴影字段。
-
-插件从 ASS/SSA Style `Format` 和 `Style` 中删除 `SecondaryColour`、`OutlineColour`、`BackColour`、`ScaleX`、`ScaleY`、`BorderStyle`、`Outline` 和 `Shadow`。SSA 中等价的 `TertiaryColour` 也会删除。内联 `\fscx` 和 `\fscy` 同样会删除。
-
-通用字体列表包含 Arial、Helvetica、Verdana、Noto、思源、微软雅黑、黑体、宋体、苹方、DejaVu 和 Liberation 等常用字体家族，以及 `sans-serif`、`serif` 和 `monospace`。插件不检查所选字体是否已安装。播放端找不到字体时，ASS 渲染器可能使用替代字体。
-
-## 安装
-
-前置条件：Emby Server 版本需要兼容 `MediaBrowser.Server.Core 4.9.1.90`。首次安装前，先备份 Emby 配置目录。
-
-1. 从 `artifacts/plugin` 目录获取构建后的 `EmbySubtitleOptimization.dll`。
-2. 停止 Emby Server。
-3. 将 `EmbySubtitleOptimization.dll` 复制到 Emby Server 的 `programdata/plugins` 目录。
+1. 下载 [EmbySubtitleOptimization.dll](artifacts/plugin/EmbySubtitleOptimization.dll)。
+2. 停止 Emby Server 或 Emby Server Windows 服务。
+3. 将 DLL 复制到 Windows 插件目录。
 4. 启动 Emby Server。
-5. 打开「控制台 > 插件」，确认插件列表中显示「Emby Subtitle Optimization」。
+5. 打开「控制台 > 插件 > 我的插件」，确认插件已经显示。
 
-如果插件未显示，请检查 Emby Server 日志中的程序集加载错误。不要删除源字幕文件。
+### macOS
 
-## 使用
+1. 下载 [EmbySubtitleOptimization.dll](artifacts/plugin/EmbySubtitleOptimization.dll)。
+2. 退出 Emby Server。
+3. 将 DLL 复制到实际插件目录。
+4. 启动 Emby Server，然后在插件列表中确认安装结果。
 
-1. 打开「控制台 > 插件 > Emby Subtitle Optimization > 设置」。
-2. 在「通用设置」中调整处理范围、最大行宽、Fontsize、SRT 转 ASS 默认字体、双字幕上下间隔、字幕位置、距最底部距离和输出后缀。
-3. 在「主字幕设置」中选择字体、Fontsize 比例、字体颜色、字体风格和 `Spacing`。单字幕沿用主字幕设置。
-4. 在「副字幕设置」中选择双字幕第二行的字体、Fontsize 比例、字体颜色、字体风格和 `Spacing`。
-5. 保存设置。
-6. 打开「控制台 > 计划任务」。
-7. 运行「优化 ASS/SRT 字幕」。
-8. 对媒体库执行扫描，或等待 Emby 的实时监控识别新字幕。
-9. 播放视频，并选择名称中包含 `optimized` 的字幕轨道。
+### Linux
 
-再次运行计划任务时，源字幕和设置均未变化的文件会被跳过。源字幕更新或插件设置变化后，插件会重新生成对应副本。
+1. 下载 [EmbySubtitleOptimization.dll](artifacts/plugin/EmbySubtitleOptimization.dll)。
+2. 停止 Emby Server 服务。
+3. 将 DLL 复制到 `/var/lib/emby/plugins`。
+4. 将 DLL 的所有者和权限设置为与同目录其他插件 DLL 一致。
+5. 启动 Emby Server 服务，然后在插件列表中确认安装结果。
 
-## 构建
+### Docker
 
-安装 .NET 8 SDK 或更高版本，然后运行：
+1. 下载 [EmbySubtitleOptimization.dll](artifacts/plugin/EmbySubtitleOptimization.dll)。
+2. 停止 Emby Server 容器。
+3. 找到宿主机映射的 Emby Server 数据目录。
+4. 将 DLL 复制到该数据目录下的 `plugins`。
+5. 确认容器内的 Emby Server 运行账户能够读取 DLL。
+6. 启动容器，然后在插件列表中确认安装结果。
 
-```bash
-./scripts/build.sh
-```
+### Synology、QNAP 和其他 NAS
 
-脚本先运行字幕排版测试，再将插件发布到 `artifacts/plugin`。插件本身以 `netstandard2.0` 为目标框架。
+1. 下载 [EmbySubtitleOptimization.dll](artifacts/plugin/EmbySubtitleOptimization.dll)。
+2. 在 NAS 套件管理器中停止 Emby Server。
+3. 通过 SSH、SFTP、WinSCP 或 NAS 文件管理器打开实际插件目录。
+4. 将 DLL 复制到插件目录。
+5. 将 DLL 的所有者和权限设置为与同目录其他插件 DLL 一致。
+6. 启动 Emby Server 套件，然后在插件列表中确认安装结果。
 
-## 限制
+### Android
 
-- 插件只处理 Emby 媒体库中的电影和剧集，以及视频文件同目录下的外置字幕。
-- 插件不提取或修改视频容器中的内封字幕。
-- 插件不处理远程 URL、STRM 和不可写目录。
-- 字体效果取决于播放客户端的 ASS 支持以及字体是否可用。
-- 当前文本读取支持 UTF-8、UTF-8 BOM、UTF-16 LE 和 UTF-16 BE。其他本地编码应先转换为 UTF-8。
+1. 下载 [EmbySubtitleOptimization.dll](artifacts/plugin/EmbySubtitleOptimization.dll)。
+2. 停止 Emby Server 应用。
+3. 将 DLL 复制到 Android 插件目录。
+4. 启动 Emby Server，然后在插件列表中确认安装结果。
 
-## 开发依据
+### 升级
 
-项目结构基于 [Emby 官方插件 SDK](https://github.com/MediaBrowser/Emby.SDK) 的 Simple UI 模板。Emby 官方文档说明，服务端插件可通过 `IScheduledTask` 提供计划任务，并通过 Simple UI 生成配置页。
+1. 停止 Emby Server、服务、容器或 NAS 套件。
+2. 备份现有 `EmbySubtitleOptimization.dll`。
+3. 使用新 DLL 替换插件目录中的旧文件。
+4. 检查 Linux、Docker 和 NAS 环境中的文件所有者与权限。
+5. 启动 Emby Server，然后确认插件版本。
+
+## 设置选项
+
+单字幕直接使用主字幕设置。双字幕第一行使用主字幕设置，第二行使用副字幕设置。
+
+### 通用设置
+
+| 设置 | 默认值 | 有效值或选项 | 说明 |
+| --- | --- | --- | --- |
+| 处理 ASS/SSA 字幕 | 开启 | 开启、关闭 | 控制是否处理外置 ASS 和 SSA 字幕。 |
+| 处理 SRT 字幕 | 开启 | 开启、关闭 | 控制是否将外置 SRT 转换为 ASS 副本。 |
+| 1920×1080 基准每行最大字符宽度 | `40` | `20` 到 `120` | 设置 1920×1080 横屏的基准值。其他横屏按“基准值 × 实际宽度 ÷ 1920”计算；竖屏直接使用基准值。修改基准值后，所有横屏分辨率同步重新计算。 |
+| Fontsize | `17` | `0`，或 `6` 到 `300` | 大于 `0` 时作为统一基础字号。设置为 `0` 时，ASS/SSA 使用 Style 的 `Fontsize`，SRT 使用分辨率档位默认字号。 |
+| SRT 转 ASS 默认字体 | `Arial` | 字体下拉列表 | 用于 SRT 转换后的 ASS Style 和 SRT 单字幕。 |
+| 双字幕上下间隔 | `0` | `0` 到 `80` | `0` 表示不增加间隔。该值以 1080p 为基准，更高分辨率按视频高度同比例换算。 |
+| 字幕位置 | 不修改原字幕位置 | 不修改原字幕位置、最底部居中 | 默认保留原 Style 对齐、边距和内联定位。最底部居中会替换原定位。 |
+| 距最底部距离 | `60` | `0` 到 `540` | 仅在「最底部居中」模式下生效。该值以 1080p 画布像素为基准。 |
+| 输出文件后缀 | `optimized` | 英文字母、数字、连字符、下划线 | 用于生成文件名。例如 `Movie.zh.ass` 生成 `Movie.zh.optimized.ass`。 |
+
+### 主字幕设置
+
+| 设置 | 默认值 | 有效值或选项 | 说明 |
+| --- | --- | --- | --- |
+| 字体（含单字幕） | `Source Han Sans SC` | 字体下拉列表 | 用于 ASS/SSA 单字幕，以及 ASS/SSA 和 SRT 双字幕第一行。SRT 单字幕使用「SRT 转 ASS 默认字体」。 |
+| Fontsize 比例（含单字幕） | `100` | `50` 到 `200` | 按基础字号的百分比计算。`100` 表示保持基础字号。 |
+| 字体颜色（含单字幕） | `#FFFFFF` | `#RRGGBB`、`#AARRGGBB` | 用于单字幕和双字幕第一行。八位格式中的前两位表示 Alpha。 |
+| 字体风格（含单字幕） | 粗体 | 常规、粗体、斜体、粗斜体 | 用于单字幕和双字幕第一行。 |
+| Spacing（含单字幕） | `0` | `-20` 到 `50` | ASS 字符间距。负数收紧字符，正数放宽字符。 |
+
+### 副字幕设置
+
+| 设置 | 默认值 | 有效值或选项 | 说明 |
+| --- | --- | --- | --- |
+| 字体 | `Arial` | 字体下拉列表 | 用于双字幕第二行。 |
+| Fontsize 比例 | `70` | `50` 到 `200` | 按基础字号的百分比计算。默认值表示副字幕字号为基础字号的 70%。 |
+| 字体颜色 | `#FFD966` | `#RRGGBB`、`#AARRGGBB` | 用于双字幕第二行。八位格式中的前两位表示 Alpha。 |
+| 字体风格 | 常规 | 常规、粗体、斜体、粗斜体 | 用于双字幕第二行。 |
+| Spacing | `0` | `-20` 到 `50` | 双字幕第二行的 ASS 字符间距。 |
+
+### 字体下拉列表
+
+`Arial`、`Arial Unicode MS`、`Helvetica`、`Verdana`、`Tahoma`、`Trebuchet MS`、`Georgia`、`Times New Roman`、`Courier New`、`Roboto`、`Roboto Condensed`、`Open Sans`、`Lato`、`Ubuntu`、`Inter`、`Montserrat`、`Fira Sans`、`Droid Sans`、`Noto Sans`、`Noto Serif`、`Noto Sans CJK SC`、`Noto Serif CJK SC`、`Source Han Sans SC`、`Source Han Serif SC`、`Microsoft YaHei`、`SimHei`、`SimSun`、`PingFang SC`、`Heiti SC`、`WenQuanYi Micro Hei`、`WenQuanYi Zen Hei`、`Sarasa Gothic SC`、`DejaVu Sans`、`DejaVu Serif`、`Liberation Sans`、`Liberation Serif`、`sans-serif`、`serif`、`monospace`。
+
+字体列表是固定选项，不扫描服务器中的已安装字体。播放端没有所选字体时，字幕渲染器可能使用替代字体。

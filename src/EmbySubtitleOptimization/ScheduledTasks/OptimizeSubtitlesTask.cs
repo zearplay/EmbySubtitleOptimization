@@ -33,7 +33,18 @@ namespace EmbySubtitleOptimization.ScheduledTasks
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
         {
-            return Array.Empty<TaskTriggerInfo>();
+            return new[]
+            {
+                new TaskTriggerInfo
+                {
+                    Type = TaskTriggerInfo.TriggerStartup
+                },
+                new TaskTriggerInfo
+                {
+                    Type = TaskTriggerInfo.TriggerInterval,
+                    IntervalTicks = TimeSpan.FromMinutes(15).Ticks
+                }
+            };
         }
 
         public Task Execute(CancellationToken cancellationToken, IProgress<double> progress)
@@ -124,4 +135,3 @@ namespace EmbySubtitleOptimization.ScheduledTasks
         }
     }
 }
-
