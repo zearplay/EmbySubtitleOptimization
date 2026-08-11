@@ -12,10 +12,9 @@ using MediaBrowser.Model.Tasks;
 
 namespace EmbySubtitleOptimization.ScheduledTasks
 {
-    /// <summary>Scans local video folders and generates optimized ASS subtitle copies.</summary>
+    /// <summary>Scans configured library folders and generates optimized ASS subtitle copies.</summary>
     public sealed class OptimizeSubtitlesTask : IScheduledTask
     {
-        private static readonly string[] SubtitleExtensions = { ".ass", ".ssa", ".srt" };
         private readonly ILibraryManager libraryManager;
         private readonly ILogger logger;
         private readonly SubtitleFileProcessor processor = new SubtitleFileProcessor();
@@ -54,84 +53,128 @@ namespace EmbySubtitleOptimization.ScheduledTasks
             {
                 IncludeItemTypes = new[] { "Movie", "Episode" }
             });
+            var itemsByDirectory = IndexMediaItems(items);
+            var roots = GetLibraryRoots(items);
+            logger.Info("Scanning {0} configured library location(s) for subtitle files", roots.Count);
+            var sources = LibrarySubtitleScanner.Find(
+                roots,
+                options.OutputSuffix,
+                options.EnableAss,
+                options.EnableSrt,
+                cancellationToken,
+                (path, exception) => logger.Warn("Unable to scan subtitle path {0}: {1}", path, exception.Message));
 
             var changed = 0;
             var failed = 0;
-            for (var index = 0; index < items.Length; index++)
+            var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var index = 0; index < sources.Count; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                var source = sources[index];
                 try
                 {
-                    changed += ProcessItem(items[index], options);
+                    var target = Path.Combine(
+                        Path.GetDirectoryName(source),
+                        Path.GetFileNameWithoutExtension(source) + "." + options.OutputSuffix + ".ass");
+                    if (!targets.Add(target))
+                    {
+                        logger.Warn("Skipping subtitle because another source maps to the same output: {0}", source);
+                        continue;
+                    }
+
+                    var mediaItem = FindMatchingMediaItem(source, itemsByDirectory);
+                    var result = processor.Process(
+                        source,
+                        target,
+                        mediaItem?.Width ?? 1920,
+                        mediaItem?.Height ?? 1080,
+                        options);
+                    if (result.Changed)
+                    {
+                        changed++;
+                        logger.Info("Generated {0} subtitle: {1}", result.ProfileName, target);
+                    }
                 }
                 catch (Exception exception)
                 {
                     failed++;
-                    logger.ErrorException("Unable to optimize subtitles for {0}", exception, items[index].Path);
+                    logger.ErrorException("Unable to optimize subtitle {0}", exception, source);
                 }
 
-                progress.Report(items.Length == 0 ? 100 : (index + 1) * 100.0 / items.Length);
+                progress.Report(sources.Count == 0 ? 100 : (index + 1) * 100.0 / sources.Count);
             }
 
-            logger.Info("Subtitle optimization completed: {0} files generated, {1} items failed", changed, failed);
+            if (sources.Count == 0) progress.Report(100);
+
+            logger.Info("Subtitle optimization completed: {0} files generated, {1} files failed, {2} library subtitle files found", changed, failed, sources.Count);
             return Task.CompletedTask;
         }
 
-        private int ProcessItem(BaseItem item, PluginOptions options)
+        private IReadOnlyCollection<string> GetLibraryRoots(IEnumerable<BaseItem> items)
         {
-            if (string.IsNullOrWhiteSpace(item.Path) || !item.IsFileProtocol)
+            var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var virtualFolders = libraryManager.GetVirtualFolders();
+            if (virtualFolders != null)
             {
-                return 0;
-            }
-
-            var directory = Path.GetDirectoryName(item.Path);
-            var videoBaseName = Path.GetFileNameWithoutExtension(item.Path);
-            if (string.IsNullOrWhiteSpace(directory) || string.IsNullOrWhiteSpace(videoBaseName) || !Directory.Exists(directory))
-            {
-                return 0;
-            }
-
-            var outputToken = "." + options.OutputSuffix + ".ass";
-            var sources = Directory.EnumerateFiles(directory, videoBaseName + ".*")
-                .Where(path => SubtitleExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
-                .Where(path => !path.EndsWith(outputToken, StringComparison.OrdinalIgnoreCase))
-                .Where(path => IsEnabled(path, options))
-                .OrderBy(path => SubtitlePriority(Path.GetExtension(path)))
-                .ToArray();
-
-            var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var changed = 0;
-            foreach (var source in sources)
-            {
-                var target = Path.Combine(directory, Path.GetFileNameWithoutExtension(source) + "." + options.OutputSuffix + ".ass");
-                if (!targets.Add(target))
+                foreach (var folder in virtualFolders)
                 {
-                    logger.Warn("Skipping subtitle because another source maps to the same output: {0}", source);
-                    continue;
-                }
-
-                var result = processor.Process(source, target, item.Width, item.Height, options);
-                if (result.Changed)
-                {
-                    changed++;
-                    logger.Info("Generated {0} subtitle: {1}", result.ProfileName, target);
+                    foreach (var location in folder.Locations ?? Array.Empty<string>())
+                    {
+                        if (!string.IsNullOrWhiteSpace(location)) roots.Add(location);
+                    }
                 }
             }
 
-            return changed;
+            if (roots.Count == 0)
+            {
+                foreach (var item in items)
+                {
+                    if (string.IsNullOrWhiteSpace(item.Path)) continue;
+                    var directory = Path.GetDirectoryName(item.Path);
+                    if (!string.IsNullOrWhiteSpace(directory)) roots.Add(directory);
+                }
+            }
+
+            return roots;
         }
 
-        private static bool IsEnabled(string path, PluginOptions options)
+        private static IReadOnlyDictionary<string, List<BaseItem>> IndexMediaItems(IEnumerable<BaseItem> items)
         {
-            var extension = Path.GetExtension(path);
-            return extension.Equals(".srt", StringComparison.OrdinalIgnoreCase) ? options.EnableSrt : options.EnableAss;
+            var result = new Dictionary<string, List<BaseItem>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in items)
+            {
+                if (string.IsNullOrWhiteSpace(item.Path)) continue;
+                var directory = Path.GetDirectoryName(item.Path);
+                if (string.IsNullOrWhiteSpace(directory)) continue;
+                if (!result.TryGetValue(directory, out var directoryItems))
+                {
+                    directoryItems = new List<BaseItem>();
+                    result[directory] = directoryItems;
+                }
+
+                directoryItems.Add(item);
+            }
+
+            return result;
         }
 
-        private static int SubtitlePriority(string extension)
+        private static BaseItem FindMatchingMediaItem(string subtitlePath, IReadOnlyDictionary<string, List<BaseItem>> itemsByDirectory)
         {
-            if (extension.Equals(".ass", StringComparison.OrdinalIgnoreCase)) return 0;
-            if (extension.Equals(".ssa", StringComparison.OrdinalIgnoreCase)) return 1;
-            return 2;
+            var directory = Path.GetDirectoryName(subtitlePath);
+            if (string.IsNullOrWhiteSpace(directory) || !itemsByDirectory.TryGetValue(directory, out var candidates) || candidates.Count == 0)
+            {
+                return null;
+            }
+
+            var subtitleBaseName = Path.GetFileNameWithoutExtension(subtitlePath);
+            var matched = candidates
+                .Select(item => new { Item = item, BaseName = Path.GetFileNameWithoutExtension(item.Path) })
+                .Where(value => subtitleBaseName.Equals(value.BaseName, StringComparison.OrdinalIgnoreCase)
+                                || subtitleBaseName.StartsWith(value.BaseName + ".", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(value => value.BaseName.Length)
+                .Select(value => value.Item)
+                .FirstOrDefault();
+            return matched ?? (candidates.Count == 1 ? candidates[0] : null);
         }
     }
 }

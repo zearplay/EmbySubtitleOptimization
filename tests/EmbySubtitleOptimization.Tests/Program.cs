@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using EmbySubtitleOptimization.Subtitles;
 
 namespace EmbySubtitleOptimization.Tests
@@ -21,6 +22,7 @@ namespace EmbySubtitleOptimization.Tests
             TestAssEventWithCommas();
             TestSubtitlePositionModes();
             TestFileProcessingIsIncremental();
+            TestLibrarySubtitleScanner();
 
             Console.WriteLine(failures == 0 ? "All subtitle optimizer tests passed." : failures + " test(s) failed.");
             return failures == 0 ? 0 : 1;
@@ -242,6 +244,44 @@ namespace EmbySubtitleOptimization.Tests
             finally
             {
                 Directory.Delete(directory, true);
+            }
+        }
+
+        private static void TestLibrarySubtitleScanner()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "eso-scan-tests-" + Guid.NewGuid().ToString("N"));
+            var nested = Path.Combine(root, "Season 01");
+            Directory.CreateDirectory(nested);
+            try
+            {
+                var ass = Path.Combine(root, "movie.zh.ass");
+                var ssa = Path.Combine(nested, "episode.zh.ssa");
+                var srt = Path.Combine(nested, "episode.en.srt");
+                var generatedBySuffix = Path.Combine(root, "movie.zh.optimized.ass");
+                var generatedByMarker = Path.Combine(root, "legacy-output.ass");
+                File.WriteAllText(ass, "[Script Info]\nTitle: source");
+                File.WriteAllText(ssa, "[Script Info]\nTitle: source");
+                File.WriteAllText(srt, "1\n00:00:01,000 --> 00:00:02,000\nSubtitle");
+                File.WriteAllText(generatedBySuffix, "[Script Info]\nTitle: output");
+                File.WriteAllText(generatedByMarker, "; ESO revision=10\n[Script Info]");
+                File.WriteAllText(Path.Combine(nested, "notes.txt"), "not a subtitle");
+
+                var all = LibrarySubtitleScanner.Find(
+                    new[] { root }, "optimized", true, true, CancellationToken.None);
+                True(all.Contains(ass), "library scan finds ASS directly below a configured root");
+                True(all.Contains(ssa), "library scan recursively finds SSA in a nested folder");
+                True(all.Contains(srt), "library scan recursively finds SRT in a nested folder");
+                True(!all.Contains(generatedBySuffix), "library scan skips the configured generated output suffix");
+                True(!all.Contains(generatedByMarker), "library scan skips plugin-generated ASS output");
+
+                var assOnly = LibrarySubtitleScanner.Find(
+                    new[] { root }, "optimized", true, false, CancellationToken.None);
+                True(assOnly.Contains(ass) && assOnly.Contains(ssa), "ASS scan includes ASS and SSA");
+                True(!assOnly.Contains(srt), "disabled SRT input is excluded from the scan");
+            }
+            finally
+            {
+                Directory.Delete(root, true);
             }
         }
 
