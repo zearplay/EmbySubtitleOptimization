@@ -24,17 +24,48 @@ namespace EmbySubtitleOptimization.Subtitles
             foreach (var cue in cues)
             {
                 var assText = ConvertMarkup(cue.Text.Replace("\n", "\\N"));
-                assText = SubtitleStyleFormatter.FormatAndOptimize(assText, profile, options, options.SrtDefaultFontName, profile.FontSize);
+                var formatted = SubtitleStyleFormatter.FormatAndOptimizeWithLayout(
+                    assText,
+                    profile,
+                    options,
+                    options.SrtDefaultFontName,
+                    profile.FontSize);
 
-                builder.Append("Dialogue: 0,")
-                    .Append(ToAssTime(cue.Start)).Append(',')
-                    .Append(ToAssTime(cue.End))
-                    .Append(",ESO,ESO,0,0,0,,")
-                    .Append(assText)
-                    .Append('\n');
+                if (formatted.IsBilingual)
+                {
+                    var baseMargin = options.PositionMode == SubtitlePositionMode.BottomCenter
+                        ? profile.ScaleVerticalFrom1080(options.BottomDistance1080P)
+                        : profile.MarginV;
+                    var gap = profile.ScaleVerticalFrom1080(options.BilingualLineSpacing);
+                    var primaryMargin = baseMargin
+                                        + CalculateBlockHeight(formatted.SecondaryFontSize, formatted.SecondaryLineCount)
+                                        + gap;
+                    AppendDialogue(builder, cue, Math.Max(1, primaryMargin), formatted.PrimaryText);
+                    AppendDialogue(builder, cue, 0, formatted.SecondaryText);
+                    continue;
+                }
+
+                AppendDialogue(builder, cue, 0, formatted.Text);
             }
 
             return builder.ToString();
+        }
+
+        private static void AppendDialogue(StringBuilder builder, Cue cue, int marginV, string text)
+        {
+            builder.Append("Dialogue: 0,")
+                .Append(ToAssTime(cue.Start)).Append(',')
+                .Append(ToAssTime(cue.End))
+                .Append(",ESO,ESO,0,0,")
+                .Append(marginV.ToString(CultureInfo.InvariantCulture))
+                .Append(",,")
+                .Append(text)
+                .Append('\n');
+        }
+
+        private static int CalculateBlockHeight(double fontSize, int lineCount)
+        {
+            return Math.Max(1, (int)Math.Round(fontSize * Math.Max(1, lineCount), MidpointRounding.AwayFromZero));
         }
 
         private static IEnumerable<Cue> ParseCues(string content)

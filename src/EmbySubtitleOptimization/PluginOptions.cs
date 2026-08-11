@@ -85,7 +85,7 @@ namespace EmbySubtitleOptimization
         public string SrtDefaultFontName { get; set; }
 
         [DisplayName("双字幕上下间隔")]
-        [Description("以 1080p 字幕画布像素为基准；默认值为 0，不添加额外间隔。2K 和 4K 会按高度同比例放大。")]
+        [Description("普通双字幕会按照主、副字幕的实际 Fontsize 紧凑排列。此值只增加额外间隔，以 1080p 字幕画布像素为基准；默认值为 0。")]
         public int BilingualLineSpacing { get; set; }
 
         [DisplayName("字幕位置")]

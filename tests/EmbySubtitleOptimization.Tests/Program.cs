@@ -20,6 +20,7 @@ namespace EmbySubtitleOptimization.Tests
             TestSpecialEffectsArePreserved();
             TestSrtConversion();
             TestAssEventWithCommas();
+            TestBilingualUsesIndependentEvents();
             TestSubtitlePositionModes();
             TestFileProcessingIsIncremental();
             TestLibrarySubtitleScanner();
@@ -197,7 +198,9 @@ namespace EmbySubtitleOptimization.Tests
             True(output.Contains("{\\fnVerdana\\fs52\\fsp1.25"), "single SRT cue uses common Fontsize");
             True(output.Contains("{\\fnArial\\fs52\\fsp1.25"), "bilingual SRT primary line uses common Fontsize");
             True(output.Contains("{\\fnHelvetica\\fs36.4\\fsp-0.5"), "bilingual SRT secondary line uses its percentage of common Fontsize");
-            Equal(2, output.Split('\n').Count(line => line.StartsWith("Dialogue:", StringComparison.Ordinal)), "all SRT cues convert");
+            Equal(3, output.Split('\n').Count(line => line.StartsWith("Dialogue:", StringComparison.Ordinal)), "bilingual SRT cue is emitted as two synchronized events");
+            True(output.Contains(",ESO,ESO,0,0,126,,{\\fnArial\\fs52"), "SRT primary line is offset by the actual secondary Fontsize");
+            True(output.Contains(",ESO,ESO,0,0,0,,{\\fnHelvetica\\fs36.4"), "SRT secondary line keeps the configured bottom position");
             True(!output.Contains("{\\i1}"), "SRT italic markup cannot override the configured font style");
             True(output.Contains("\\N"), "long SRT cue wraps");
         }
@@ -234,6 +237,9 @@ namespace EmbySubtitleOptimization.Tests
             True(!output.Contains("OriginalEnglish") && !output.Contains("\\fsp9") && !output.Contains("&H123456&") && !output.Contains("\\alpha&H80&"), "original inline ASS style cannot override plugin settings");
             True(output.Contains("\\N"), "ASS dialogue wraps");
             True(output.Contains("test-marker"), "generation marker is added");
+            Equal(2, output.Split('\n').Count(line => line.StartsWith("Dialogue:", StringComparison.Ordinal)), "bilingual ASS cue is emitted as two synchronized events");
+            True(output.Contains(",Default,,0,0,33,,{\\fnSource Han Sans SC\\fs33"), "ASS primary line is offset by the rounded secondary Fontsize");
+            True(output.Contains(",Default,,0,0,0,,{\\fnArial\\fs23.1"), "ASS secondary line keeps the original Style margin");
 
             var ssaOutput = AssSubtitleOptimizer.Optimize(
                 ass.Replace("[V4+ Styles]", "[V4 Styles]").Replace("OutlineColour", "TertiaryColour"),
@@ -246,6 +252,31 @@ namespace EmbySubtitleOptimization.Tests
             var ssaValues = ssaStyle.Substring(7).Split(',');
             Equal("&H00000000", ssaValues[Array.IndexOf(ssaFields, "TertiaryColour")], "SSA border color is forced to black");
             Equal("0.1", ssaValues[Array.IndexOf(ssaFields, "Outline")], "SSA fallback border width is forced to 0.1");
+        }
+
+        private static void TestBilingualUsesIndependentEvents()
+        {
+            const string ass = "[Script Info]\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, Bold, Italic, Underline, StrikeOut, Spacing, Angle, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Bottom,Arial,20,&H00FFFFFF,0,0,0,0,0,0,2,20,20,20,1\nStyle: Top,Arial,20,&H00FFFFFF,0,0,0,0,0,0,8,20,20,20,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:03.00,Bottom,,0,0,0,,主字幕很大\\NSecondary small\nDialogue: 0,0:00:04.00,0:00:06.00,Top,,0,0,0,,主字幕很大\\NSecondary small";
+            var options = new PluginOptions
+            {
+                CommonFontSize = 100,
+                PrimaryFontSizePercent = 150,
+                SecondaryFontSizePercent = 50,
+                BilingualLineSpacing = 0
+            };
+            var output = AssSubtitleOptimizer.Optimize(
+                ass,
+                ResolutionProfile.FromVideo(1920, 1080, options),
+                options,
+                "independent-bilingual-events");
+            var dialogues = output.Split('\n').Where(line => line.StartsWith("Dialogue:", StringComparison.Ordinal)).ToArray();
+
+            Equal(4, dialogues.Length, "each ordinary bilingual cue produces primary and secondary events");
+            True(dialogues[0].Contains(",Bottom,,0,0,70,,{\\fnSource Han Sans SC\\fs150"), "bottom primary offset uses the 50-point secondary block height");
+            True(dialogues[1].Contains(",Bottom,,0,0,0,,{\\fnArial\\fs50"), "bottom secondary preserves the 20-point Style margin");
+            True(dialogues[2].Contains(",Top,,0,0,0,,{\\fnSource Han Sans SC\\fs150"), "top primary preserves the Style margin");
+            True(dialogues[3].Contains(",Top,,0,0,170,,{\\fnArial\\fs50"), "top secondary offset uses the 150-point primary block height");
+            True(dialogues.All(line => !line.Contains("\\N")), "short bilingual lines no longer depend on multiline line-height calculation");
         }
 
         private static void TestSubtitlePositionModes()
@@ -343,7 +374,7 @@ namespace EmbySubtitleOptimization.Tests
                 var processor = new SubtitleFileProcessor();
                 var options = new PluginOptions();
                 True(processor.Process(source, target, 3840, 2160, options).Changed, "first file processing writes output");
-                True(File.ReadAllText(target).Contains("revision=20"), "file marker records processing revision");
+                True(File.ReadAllText(target).Contains("revision=21"), "file marker records processing revision");
                 True(File.ReadAllText(target).Contains("profile=4K"), "file marker records resolution profile");
                 True(!processor.Process(source, target, 3840, 2160, options).Changed, "unchanged file is skipped");
 

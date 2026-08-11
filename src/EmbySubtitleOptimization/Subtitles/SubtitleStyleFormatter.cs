@@ -27,6 +27,16 @@ namespace EmbySubtitleOptimization.Subtitles
             string singleFontName = null,
             double? styleFontSize = null)
         {
+            return FormatAndOptimizeWithLayout(text, profile, options, singleFontName, styleFontSize).Text;
+        }
+
+        internal static FormattedSubtitle FormatAndOptimizeWithLayout(
+            string text,
+            ResolutionProfile profile,
+            PluginOptions options,
+            string singleFontName = null,
+            double? styleFontSize = null)
+        {
             var sanitizedText = RemoveConfigurableInlineTags(RemoveForbiddenInlineTags(text));
             var inheritedFontSize = styleFontSize > 0 ? styleFontSize.Value : profile.FontSize;
             var baseFontSize = options.CommonFontSize > 0 ? options.CommonFontSize : inheritedFontSize;
@@ -34,7 +44,7 @@ namespace EmbySubtitleOptimization.Subtitles
             var secondaryFontSize = ScaleFontSize(baseFontSize, options.SecondaryFontSizePercent);
             if (string.IsNullOrWhiteSpace(sanitizedText))
             {
-                return sanitizedText;
+                return FormattedSubtitle.Single(sanitizedText);
             }
 
             if (TextLayout.IsSpecialEffect(sanitizedText))
@@ -49,7 +59,7 @@ namespace EmbySubtitleOptimization.Subtitles
                     options.PrimaryBorderWidth,
                     options.PrimaryBorderColor);
                 var specialText = RemoveInlineFontSize(sanitizedText);
-                return specialOverride + ReapplyOverrideAfterStyleResets(specialText, specialOverride);
+                return FormattedSubtitle.Single(specialOverride + ReapplyOverrideAfterStyleResets(specialText, specialOverride));
             }
 
             var inheritedFontSizeText = RemoveInlineFontSize(sanitizedText);
@@ -68,7 +78,7 @@ namespace EmbySubtitleOptimization.Subtitles
                     options.PrimaryBorderWidth,
                     options.PrimaryBorderColor);
                 var styled = singleOverride + ReapplyOverrideAfterStyleResets(inheritedFontSizeText, singleOverride);
-                return Optimize(styled, profile, options);
+                return FormattedSubtitle.Single(Optimize(styled, profile, options));
             }
 
             var primaryOverride = BuildOverride(
@@ -91,9 +101,16 @@ namespace EmbySubtitleOptimization.Subtitles
                 options.SecondaryBorderColor);
             var primaryText = ReapplyOverrideAfterStyleResets(originalLines[0], primaryOverride);
             var secondaryText = ReapplyOverrideAfterStyleResets(originalLines[1], secondaryOverride);
-            var bilingualText = primaryOverride + primaryText + "\\N" + secondaryOverride + secondaryText;
+            var optimizedPrimary = Optimize(primaryOverride + primaryText, profile, options);
+            var optimizedSecondary = Optimize(secondaryOverride + secondaryText, profile, options);
+            var bilingualText = optimizedPrimary + "\\N" + optimizedSecondary;
             var optimized = Optimize(bilingualText, profile, options);
-            return InsertBilingualGap(optimized, secondaryOverride, profile, options.BilingualLineSpacing);
+            return FormattedSubtitle.Bilingual(
+                InsertBilingualGap(optimized, secondaryOverride, profile, options.BilingualLineSpacing),
+                optimizedPrimary,
+                optimizedSecondary,
+                primaryFontSize,
+                secondaryFontSize);
         }
 
         internal static string RemoveInlineFontSize(string text)
@@ -240,6 +257,53 @@ namespace EmbySubtitleOptimization.Subtitles
         {
             var assColor = ToAssColor(htmlColor, out var assAlpha);
             return "&H" + assAlpha + assColor;
+        }
+    }
+
+    internal sealed class FormattedSubtitle
+    {
+        private FormattedSubtitle(
+            string text,
+            string primaryText,
+            string secondaryText,
+            double primaryFontSize,
+            double secondaryFontSize)
+        {
+            Text = text;
+            PrimaryText = primaryText;
+            SecondaryText = secondaryText;
+            PrimaryFontSize = primaryFontSize;
+            SecondaryFontSize = secondaryFontSize;
+        }
+
+        public string Text { get; }
+        public string PrimaryText { get; }
+        public string SecondaryText { get; }
+        public double PrimaryFontSize { get; }
+        public double SecondaryFontSize { get; }
+        public bool IsBilingual => PrimaryText != null && SecondaryText != null;
+        public int PrimaryLineCount => CountLines(PrimaryText);
+        public int SecondaryLineCount => CountLines(SecondaryText);
+
+        public static FormattedSubtitle Single(string text)
+        {
+            return new FormattedSubtitle(text, null, null, 0, 0);
+        }
+
+        public static FormattedSubtitle Bilingual(
+            string text,
+            string primaryText,
+            string secondaryText,
+            double primaryFontSize,
+            double secondaryFontSize)
+        {
+            return new FormattedSubtitle(text, primaryText, secondaryText, primaryFontSize, secondaryFontSize);
+        }
+
+        private static int CountLines(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+            return Regex.Split(text, @"\\[Nn]").Length;
         }
     }
 }

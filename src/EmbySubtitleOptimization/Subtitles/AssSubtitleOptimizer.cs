@@ -20,6 +20,7 @@ namespace EmbySubtitleOptimization.Subtitles
             var scriptWidth = ReadScriptResolution(lines, "PlayResX", profile.Width);
             var scriptHeight = ReadScriptResolution(lines, "PlayResY", profile.Height);
             var styleFontSizes = ReadStyleFontSizes(lines);
+            var stylePositions = ReadStylePositions(lines);
             NormalizeStyleFields(lines, options);
             var eventSection = false;
             var textIndex = 9;
@@ -82,19 +83,69 @@ namespace EmbySubtitleOptimization.Subtitles
                 var fontSize = styleFontSizes.TryGetValue(styleName, out var configuredFontSize)
                     ? configuredFontSize
                     : profile.FontSize;
-                var formattedText = SubtitleStyleFormatter.FormatAndOptimize(originalText, profile, options, null, fontSize);
+                var formatted = SubtitleStyleFormatter.FormatAndOptimizeWithLayout(originalText, profile, options, null, fontSize);
+                var formattedText = formatted.Text;
                 if (options.PositionMode == SubtitlePositionMode.BottomCenter && !isSpecialEffect)
                 {
                     var bottomMargin = CalculateBottomMargin(scriptHeight, profile, options.BottomDistance1080P);
                     if (marginVIndex >= 0 && fieldsInEvent.Length > marginVIndex)
                     {
                         fieldsInEvent[marginVIndex] = Math.Max(1, bottomMargin).ToString(CultureInfo.InvariantCulture);
+                        if (formatted.IsBilingual)
+                        {
+                            var primaryFields = (string[])fieldsInEvent.Clone();
+                            var secondaryFields = (string[])fieldsInEvent.Clone();
+                            var gap = CalculateBilingualGap(scriptHeight, profile, options.BilingualLineSpacing);
+                            var primaryMargin = bottomMargin + CalculateBlockHeight(formatted.SecondaryFontSize, formatted.SecondaryLineCount) + gap;
+                            primaryFields[marginVIndex] = Math.Max(1, primaryMargin).ToString(CultureInfo.InvariantCulture);
+                            primaryFields[textIndex] = ForceBottomCenter(formatted.PrimaryText);
+                            secondaryFields[textIndex] = ForceBottomCenter(formatted.SecondaryText);
+                            lines[index] = BuildEventLine(lines[index], prefixLength, primaryFields);
+                            lines.Insert(index + 1, BuildEventLine(lines[index], prefixLength, secondaryFields));
+                            index++;
+                            continue;
+                        }
+
                         formattedText = ForceBottomCenter(formattedText);
                     }
                     else
                     {
                         formattedText = ForceBottomCenterWithPosition(formattedText, scriptWidth, scriptHeight, bottomMargin);
                     }
+                }
+
+                if (formatted.IsBilingual
+                    && !isSpecialEffect
+                    && marginVIndex >= 0
+                    && fieldsInEvent.Length > marginVIndex
+                    && stylePositions.TryGetValue(styleName, out var stylePosition)
+                    && (IsBottomAligned(stylePosition.Alignment) || IsTopAligned(stylePosition.Alignment)))
+                {
+                    var primaryFields = (string[])fieldsInEvent.Clone();
+                    var secondaryFields = (string[])fieldsInEvent.Clone();
+                    var effectiveMargin = ReadEventMargin(fieldsInEvent[marginVIndex], stylePosition.MarginV);
+                    var gap = CalculateBilingualGap(scriptHeight, profile, options.BilingualLineSpacing);
+                    if (IsBottomAligned(stylePosition.Alignment))
+                    {
+                        primaryFields[marginVIndex] = Math.Max(
+                                1,
+                                effectiveMargin + CalculateBlockHeight(formatted.SecondaryFontSize, formatted.SecondaryLineCount) + gap)
+                            .ToString(CultureInfo.InvariantCulture);
+                    }
+                    else
+                    {
+                        secondaryFields[marginVIndex] = Math.Max(
+                                1,
+                                effectiveMargin + CalculateBlockHeight(formatted.PrimaryFontSize, formatted.PrimaryLineCount) + gap)
+                            .ToString(CultureInfo.InvariantCulture);
+                    }
+
+                    primaryFields[textIndex] = formatted.PrimaryText;
+                    secondaryFields[textIndex] = formatted.SecondaryText;
+                    lines[index] = BuildEventLine(lines[index], prefixLength, primaryFields);
+                    lines.Insert(index + 1, BuildEventLine(lines[index], prefixLength, secondaryFields));
+                    index++;
+                    continue;
                 }
 
                 fieldsInEvent[textIndex] = formattedText;
@@ -164,6 +215,46 @@ namespace EmbySubtitleOptimization.Subtitles
                 MidpointRounding.AwayFromZero));
         }
 
+        private static int CalculateBilingualGap(
+            int scriptHeight,
+            ResolutionProfile profile,
+            int referenceGap)
+        {
+            if (referenceGap <= 0) return 0;
+            var videoGap = profile.ScaleVerticalFrom1080(referenceGap);
+            return Math.Max(1, (int)Math.Round(
+                videoGap * scriptHeight / (double)profile.Height,
+                MidpointRounding.AwayFromZero));
+        }
+
+        private static int CalculateBlockHeight(double fontSize, int lineCount)
+        {
+            return Math.Max(1, (int)Math.Round(fontSize * Math.Max(1, lineCount), MidpointRounding.AwayFromZero));
+        }
+
+        private static int ReadEventMargin(string value, int styleMargin)
+        {
+            return int.TryParse(value?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var eventMargin)
+                   && eventMargin > 0
+                ? eventMargin
+                : Math.Max(0, styleMargin);
+        }
+
+        private static string BuildEventLine(string sourceLine, int prefixLength, string[] fields)
+        {
+            return sourceLine.Substring(0, prefixLength) + string.Join(",", fields);
+        }
+
+        private static bool IsBottomAligned(int alignment)
+        {
+            return alignment >= 1 && alignment <= 3;
+        }
+
+        private static bool IsTopAligned(int alignment)
+        {
+            return alignment >= 7 && alignment <= 9;
+        }
+
         private static IReadOnlyDictionary<string, double> ReadStyleFontSizes(IReadOnlyList<string> lines)
         {
             var result = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
@@ -203,6 +294,75 @@ namespace EmbySubtitleOptimization.Subtitles
             }
 
             return result;
+        }
+
+        private static IReadOnlyDictionary<string, StylePosition> ReadStylePositions(IReadOnlyList<string> lines)
+        {
+            var result = new Dictionary<string, StylePosition>(StringComparer.OrdinalIgnoreCase);
+            var styleSection = false;
+            var legacyStyleSection = false;
+            var fieldCount = 23;
+            var nameIndex = 0;
+            var alignmentIndex = 18;
+            var marginVIndex = 21;
+
+            foreach (var line in lines)
+            {
+                var trimmed = line.Trim();
+                if (trimmed.StartsWith("[", StringComparison.Ordinal))
+                {
+                    legacyStyleSection = trimmed.Equals("[V4 Styles]", StringComparison.OrdinalIgnoreCase);
+                    styleSection = trimmed.Equals("[V4+ Styles]", StringComparison.OrdinalIgnoreCase) || legacyStyleSection;
+                    continue;
+                }
+
+                if (!styleSection) continue;
+                if (trimmed.StartsWith("Format:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var fields = trimmed.Substring(7).Split(',').Select(field => field.Trim()).ToArray();
+                    fieldCount = fields.Length;
+                    nameIndex = Array.FindIndex(fields, field => field.Equals("Name", StringComparison.OrdinalIgnoreCase));
+                    alignmentIndex = Array.FindIndex(fields, field => field.Equals("Alignment", StringComparison.OrdinalIgnoreCase));
+                    marginVIndex = Array.FindIndex(fields, field => field.Equals("MarginV", StringComparison.OrdinalIgnoreCase));
+                    continue;
+                }
+
+                if (!trimmed.StartsWith("Style:", StringComparison.OrdinalIgnoreCase)) continue;
+                var values = trimmed.Substring(6).TrimStart().Split(new[] { ',' }, fieldCount);
+                if (nameIndex < 0
+                    || alignmentIndex < 0
+                    || marginVIndex < 0
+                    || values.Length <= Math.Max(nameIndex, Math.Max(alignmentIndex, marginVIndex)))
+                {
+                    continue;
+                }
+
+                if (!int.TryParse(values[alignmentIndex].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var alignment))
+                {
+                    continue;
+                }
+
+                int.TryParse(values[marginVIndex].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var marginV);
+                result[values[nameIndex].Trim()] = new StylePosition(
+                    legacyStyleSection ? ConvertLegacyAlignment(alignment) : alignment,
+                    marginV);
+            }
+
+            return result;
+        }
+
+        private static int ConvertLegacyAlignment(int alignment)
+        {
+            switch (alignment)
+            {
+                case 5: return 7;
+                case 6: return 8;
+                case 7: return 9;
+                case 9: return 4;
+                case 10: return 5;
+                case 11: return 6;
+                default: return alignment;
+            }
         }
 
         private static void NormalizeStyleFields(IList<string> lines, PluginOptions options)
@@ -357,6 +517,18 @@ namespace EmbySubtitleOptimization.Subtitles
                    || ((fieldName.Equals("OutlineColour", StringComparison.OrdinalIgnoreCase)
                         || fieldName.Equals("OutlineColor", StringComparison.OrdinalIgnoreCase))
                        && !borderColorField.Equals("OutlineColour", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private sealed class StylePosition
+        {
+            public StylePosition(int alignment, int marginV)
+            {
+                Alignment = alignment;
+                MarginV = marginV;
+            }
+
+            public int Alignment { get; }
+            public int MarginV { get; }
         }
 
     }
