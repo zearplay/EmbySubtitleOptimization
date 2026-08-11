@@ -16,6 +16,9 @@ namespace EmbySubtitleOptimization.Subtitles
         private static readonly Regex ForbiddenInlineTagRegex = new Regex(
             @"\\(?:2c|3c|3a|4c|blur|be|shad|xbord|bord|xshad|yshad|fscx|fscy)(?![a-z])\s*(?:&H[0-9a-f]+&?|[+-]?(?:\d+(?:\.\d*)?|\.\d+))?",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex ConfigurableInlineTagRegex = new Regex(
+            @"\\fn[^\\}]*|\\fsp\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)?|\\(?:1c|c|1a|alpha)(?![a-z])\s*(?:&H[0-9a-f]+&?)?|\\[bi](?![a-z])\s*[+-]?\d*",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         public static string FormatAndOptimize(
             string text,
@@ -24,7 +27,7 @@ namespace EmbySubtitleOptimization.Subtitles
             string singleFontName = null,
             double? styleFontSize = null)
         {
-            var sanitizedText = RemoveForbiddenInlineTags(text);
+            var sanitizedText = RemoveConfigurableInlineTags(RemoveForbiddenInlineTags(text));
             var inheritedFontSize = styleFontSize > 0 ? styleFontSize.Value : profile.FontSize;
             var baseFontSize = options.CommonFontSize > 0 ? options.CommonFontSize : inheritedFontSize;
             var primaryFontSize = ScaleFontSize(baseFontSize, options.PrimaryFontSizePercent);
@@ -36,11 +39,17 @@ namespace EmbySubtitleOptimization.Subtitles
 
             if (TextLayout.IsSpecialEffect(sanitizedText))
             {
-                return BuildBorderOverride(
-                           options.PrimaryBorderEnabled,
-                           options.PrimaryBorderWidth,
-                           options.PrimaryBorderColor)
-                       + NormalizeInlineFontSize(sanitizedText, primaryFontSize);
+                var specialOverride = BuildOverride(
+                    options.PrimarySubtitleColor,
+                    options.PrimaryFontStyle,
+                    options.PrimaryFontName,
+                    primaryFontSize,
+                    options.PrimaryCharacterSpacing,
+                    options.PrimaryBorderEnabled,
+                    options.PrimaryBorderWidth,
+                    options.PrimaryBorderColor);
+                var specialText = RemoveInlineFontSize(sanitizedText);
+                return specialOverride + ReapplyOverrideAfterStyleResets(specialText, specialOverride);
             }
 
             var inheritedFontSizeText = RemoveInlineFontSize(sanitizedText);
@@ -109,6 +118,17 @@ namespace EmbySubtitleOptimization.Subtitles
             });
         }
 
+        internal static string RemoveConfigurableInlineTags(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+
+            return AssOverrideBlockRegex.Replace(text, match =>
+            {
+                var tags = ConfigurableInlineTagRegex.Replace(match.Groups["tags"].Value, string.Empty);
+                return tags.Length == 0 ? string.Empty : "{" + tags + "}";
+            });
+        }
+
         internal static string ReapplyOverrideAfterStyleResets(string text, string styleOverride)
         {
             if (string.IsNullOrEmpty(text)) return text;
@@ -155,11 +175,6 @@ namespace EmbySubtitleOptimization.Subtitles
             var spacing = characterSpacing.ToString("0.##", CultureInfo.InvariantCulture);
             var borderTags = BuildBorderTags(borderEnabled, borderWidth, borderColor);
             return "{\\fn" + safeFontName + "\\fs" + size + "\\fsp" + spacing + "\\c&H" + assColor + "&\\alpha&H" + assAlpha + "&\\b" + bold + "\\i" + italic + borderTags + "}";
-        }
-
-        private static string BuildBorderOverride(bool borderEnabled, double borderWidth, string borderColor)
-        {
-            return "{" + BuildBorderTags(borderEnabled, borderWidth, borderColor) + "}";
         }
 
         private static string BuildBorderTags(bool borderEnabled, double borderWidth, string borderColor)

@@ -67,7 +67,7 @@ namespace EmbySubtitleOptimization.Subtitles
                 .AppendLine("Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, Bold, Italic, Underline, StrikeOut, Spacing, Angle, BorderStyle, Outline, Alignment, MarginL, MarginR, MarginV, Encoding")
                 .Append("Style: ESO,").Append(font).Append(',').Append(fontSize.ToString("0.##", CultureInfo.InvariantCulture))
                 .Append(",&H00FFFFFF,&H00000000,0,0,0,0,")
-                .Append(options.PrimaryCharacterSpacing.ToString("0.##", CultureInfo.InvariantCulture)).Append(",0,1,1,2,")
+                .Append(options.PrimaryCharacterSpacing.ToString("0.##", CultureInfo.InvariantCulture)).Append(",0,1,0.1,2,")
                 .Append(profile.Width / 20).Append(',').Append(profile.Width / 20).Append(',').Append(marginV)
                 .AppendLine(",1")
                 .AppendLine()

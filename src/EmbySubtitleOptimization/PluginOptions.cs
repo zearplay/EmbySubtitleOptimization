@@ -34,8 +34,8 @@ namespace EmbySubtitleOptimization
             SecondarySubtitleColor = "#FFD966";
             PrimaryBorderEnabled = true;
             SecondaryBorderEnabled = true;
-            PrimaryBorderWidth = 1;
-            SecondaryBorderWidth = 1;
+            PrimaryBorderWidth = 0.1;
+            SecondaryBorderWidth = 0.1;
             PrimaryBorderColor = "#000000";
             SecondaryBorderColor = "#000000";
             SingleFontStyle = SubtitleFontStyle.Regular;
@@ -126,7 +126,7 @@ namespace EmbySubtitleOptimization
         public bool PrimaryBorderEnabled { get; set; }
 
         [DisplayName("边框宽度（含单字幕）")]
-        [Description("单字幕和双字幕第一行的外边框宽度。默认值为 1。")]
+        [Description("单字幕和双字幕第一行的外边框宽度。默认值为 0.1。")]
         public double PrimaryBorderWidth { get; set; }
 
         [DisplayName("边框颜色（含单字幕）")]
@@ -163,7 +163,7 @@ namespace EmbySubtitleOptimization
         public bool SecondaryBorderEnabled { get; set; }
 
         [DisplayName("边框宽度")]
-        [Description("双字幕第二行的外边框宽度。默认值为 1。")]
+        [Description("双字幕第二行的外边框宽度。默认值为 0.1。")]
         public double SecondaryBorderWidth { get; set; }
 
         [DisplayName("边框颜色")]

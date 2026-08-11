@@ -15,8 +15,8 @@ namespace EmbySubtitleOptimization
         public string SecondarySubtitleColor { get; set; } = "#FFD966";
         public bool PrimaryBorderEnabled { get; set; } = true;
         public bool SecondaryBorderEnabled { get; set; } = true;
-        public double PrimaryBorderWidth { get; set; } = 1;
-        public double SecondaryBorderWidth { get; set; } = 1;
+        public double PrimaryBorderWidth { get; set; } = 0.1;
+        public double SecondaryBorderWidth { get; set; } = 0.1;
         public string PrimaryBorderColor { get; set; } = "#000000";
         public string SecondaryBorderColor { get; set; } = "#000000";
         public SubtitleFontStyle PrimaryFontStyle { get; set; } = SubtitleFontStyle.Bold;

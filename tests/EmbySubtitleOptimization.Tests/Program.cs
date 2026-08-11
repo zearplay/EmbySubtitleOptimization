@@ -89,6 +89,8 @@ namespace EmbySubtitleOptimization.Tests
             Equal("Source Han Sans SC", options.PrimaryFontName, "primary font defaults to Source Han Sans SC");
             Equal(70, options.SecondaryFontSizePercent, "secondary Fontsize ratio defaults to 70 percent");
             Equal(0, options.BilingualLineSpacing, "bilingual spacing defaults to zero");
+            Equal(0.1d, options.PrimaryBorderWidth, "primary border width defaults to 0.1");
+            Equal(0.1d, options.SecondaryBorderWidth, "secondary border width defaults to 0.1");
         }
 
         private static void TestCjkWidthAndWrapping()
@@ -110,7 +112,7 @@ namespace EmbySubtitleOptimization.Tests
         private static void TestSpecialEffectsArePreserved()
         {
             const string input = "{\\pos(100,200)\\fs28\\bord2\\blur3\\3c&HFFFFFF&\\xshad1}这是一条不能被改写的超长定位字幕";
-            const string expected = "{\\3c&H000000&\\3a&H00&\\bord1}{\\fs17}{\\pos(100,200)}这是一条不能被改写的超长定位字幕";
+            const string expected = "{\\fnSource Han Sans SC\\fs17\\fsp0\\c&HFFFFFF&\\alpha&H00&\\b1\\i0\\3c&H000000&\\3a&H00&\\bord0.1}{\\pos(100,200)}这是一条不能被改写的超长定位字幕";
             var options = new PluginOptions();
             var profile = ResolutionProfile.FromVideo(1920, 1080, options);
             Equal(expected, SubtitleStyleFormatter.FormatAndOptimize(input, profile, options), "positioned ASS event keeps effects but inherits Style Fontsize");
@@ -150,12 +152,18 @@ namespace EmbySubtitleOptimization.Tests
             var single = SubtitleStyleFormatter.FormatAndOptimize("单行字幕", profile, options);
             True(single.StartsWith("{\\fnSource Han Sans SC\\fs50\\fsp1.5\\c&H0000FF&\\alpha&H00&\\b1\\i1\\3c&H332211&\\3a&H00&\\bord1.5}", StringComparison.Ordinal), "single subtitle uses common Fontsize and primary settings");
 
-            var bilingual = SubtitleStyleFormatter.FormatAndOptimize("主中文字幕\\N{\\rEng}A much longer secondary English subtitle", profile, options);
+            var bilingual = SubtitleStyleFormatter.FormatAndOptimize(
+                "{\\fnOriginalPrimary\\fs99\\fsp9\\1c&H123456&\\alpha&H80&\\b0\\i0}主中文字幕\\N{\\rEng\\fnMicrosoft YaHei\\fs88\\fsp8\\1c&HE8E8E8&\\alpha&H40&\\b1\\i0}A much longer secondary English subtitle",
+                profile,
+                options);
             True(bilingual.Contains("\\fnSource Han Sans SC\\fs50\\fsp1.5\\c&H0000FF&\\alpha&H00&\\b1\\i1"), "primary subtitle uses 100 percent of common Fontsize");
             True(bilingual.Contains("\\fnRoboto\\fs35\\fsp-0.5\\c&H00FF00&\\alpha&H7F&\\b0\\i1"), "secondary subtitle uses 70 percent of common Fontsize");
             True(bilingual.Contains("\\3c&H332211&\\3a&H00&\\bord1.5"), "primary subtitle uses its configured outer border");
             True(bilingual.Contains("\\3c&H665544&\\3a&H7F&\\bord2.25"), "secondary subtitle uses its configured outer border");
             True(bilingual.Contains("\\rEng\\fnRoboto\\fs35"), "configured secondary Fontsize is reapplied after the original Style reset");
+            True(!bilingual.Contains("OriginalPrimary") && !bilingual.Contains("Microsoft YaHei"), "original inline fonts cannot override configured fonts");
+            True(!bilingual.Contains("\\fs99") && !bilingual.Contains("\\fs88") && !bilingual.Contains("\\fsp9") && !bilingual.Contains("\\fsp8"), "original inline size and spacing cannot override configured values");
+            True(!bilingual.Contains("&H123456&") && !bilingual.Contains("&HE8E8E8&") && !bilingual.Contains("\\alpha&H80&") && !bilingual.Contains("\\alpha&H40&"), "original inline colors cannot override configured colors");
             True(!bilingual.Contains("\\fscx"), "styled bilingual subtitle has no horizontal scale override");
             True(bilingual.Contains("{\\fs10}\\h{\\r}\\N"), "bilingual line gap uses Fontsize without ScaleY");
         }
@@ -179,20 +187,20 @@ namespace EmbySubtitleOptimization.Tests
             True(output.Contains("PlayResX: 1920"), "SRT output uses video resolution");
             True(output.Contains("Style: ESO,Verdana,52"), "SRT ASS style uses selected font and common Fontsize");
             True(output.Contains("Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, Bold, Italic, Underline, StrikeOut, Spacing, Angle, BorderStyle, Outline, Alignment, MarginL, MarginR, MarginV, Encoding"), "SRT ASS style includes the default border fields");
-            True(output.Contains("Style: ESO,Verdana,52,&H00FFFFFF,&H00000000,0,0,0,0,1.25,0,1,1,2,"), "SRT ASS style uses a black border with width one");
+            True(output.Contains("Style: ESO,Verdana,52,&H00FFFFFF,&H00000000,0,0,0,0,1.25,0,1,0.1,2,"), "SRT ASS style uses a black border with width 0.1");
             True(output.Contains(",96,96,90,1"), "SRT bottom-center mode uses the configured bottom distance");
             True(!output.Contains("ScaledBorderAndShadow"), "SRT ASS omits ScaledBorderAndShadow");
             True(output.Contains("{\\fnVerdana\\fs52\\fsp1.25"), "single SRT cue uses common Fontsize");
             True(output.Contains("{\\fnArial\\fs52\\fsp1.25"), "bilingual SRT primary line uses common Fontsize");
             True(output.Contains("{\\fnHelvetica\\fs36.4\\fsp-0.5"), "bilingual SRT secondary line uses its percentage of common Fontsize");
             Equal(2, output.Split('\n').Count(line => line.StartsWith("Dialogue:", StringComparison.Ordinal)), "all SRT cues convert");
-            True(output.Contains("{\\i1}"), "SRT italic markup converts");
+            True(!output.Contains("{\\i1}"), "SRT italic markup cannot override the configured font style");
             True(output.Contains("\\N"), "long SRT cue wraps");
         }
 
         private static void TestAssEventWithCommas()
         {
-            const string ass = "[Script Info]\nScriptType: v4.00+\nPlayResY: 288\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,33,&H00FFFFFF,&H000000FF,&H00FFFFFF,&H00000000,0,0,0,0,100,100,0,0,3,2,0,2,10,10,10,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,{\\bord2\\blur1}这是带有逗号,而且非常长的字幕\\N{\\fs22\\4c&HFFFFFF&\\yshad2}English subtitle";
+            const string ass = "[Script Info]\nScriptType: v4.00+\nPlayResY: 288\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,33,&H00FFFFFF,&H000000FF,&H00FFFFFF,&H00000000,0,0,0,0,100,100,0,0,3,2,0,2,10,10,10,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,{\\bord2\\blur1}这是带有逗号,而且非常长的字幕\\N{\\fs22\\fnOriginalEnglish\\fsp9\\1c&H123456&\\alpha&H80&\\b1\\i1\\4c&HFFFFFF&\\yshad2}English subtitle";
             var options = new PluginOptions { MaxLineWidth1080P = 20, CommonFontSize = 0, BilingualLineSpacing = 0 };
             var output = AssSubtitleOptimizer.Optimize(ass, ResolutionProfile.FromVideo(1920, 1080, options), options, "test-marker");
             True(output.Contains("逗号,"), "comma in ASS text is preserved");
@@ -206,13 +214,14 @@ namespace EmbySubtitleOptimization.Tests
             var styleValues = styleLine.Substring(7).Split(',');
             Equal("&H00000000", styleValues[Array.IndexOf(styleFields, "OutlineColour")], "ASS border color is forced to black");
             Equal("1", styleValues[Array.IndexOf(styleFields, "BorderStyle")], "ASS border style is forced to normal outline");
-            Equal("1", styleValues[Array.IndexOf(styleFields, "Outline")], "ASS border width is forced to one");
+            Equal("0.1", styleValues[Array.IndexOf(styleFields, "Outline")], "ASS fallback border width is forced to 0.1");
             True(!output.Contains("{\\fs22}English subtitle"), "original inline ASS Fontsize is replaced");
             True(output.Contains("\\fs33"), "primary subtitle uses 100 percent of Style Fontsize");
             True(output.Contains("\\fs23.1"), "secondary subtitle uses 70 percent of Style Fontsize");
             Equal(2, Regex.Matches(output, @"\\fs(?![pc])(?:\d|\.)").Count, "bilingual lines have independent fs tags");
             True(!Regex.IsMatch(output, @"\\(?:2c|4c|blur|be|shad|xbord|xshad|yshad|fscx|fscy)(?![a-z])", RegexOptions.IgnoreCase), "forbidden inline tags are absent from optimized ASS");
             True(!output.Contains("\\bord2") && !output.Contains("\\3c&HFFFFFF&"), "source border overrides are replaced by configured border settings");
+            True(!output.Contains("OriginalEnglish") && !output.Contains("\\fsp9") && !output.Contains("&H123456&") && !output.Contains("\\alpha&H80&"), "original inline ASS style cannot override plugin settings");
             True(output.Contains("\\N"), "ASS dialogue wraps");
             True(output.Contains("test-marker"), "generation marker is added");
 
@@ -226,7 +235,7 @@ namespace EmbySubtitleOptimization.Tests
             var ssaStyle = ssaOutput.Split('\n').Single(line => line.StartsWith("Style: Default,", StringComparison.Ordinal));
             var ssaValues = ssaStyle.Substring(7).Split(',');
             Equal("&H00000000", ssaValues[Array.IndexOf(ssaFields, "TertiaryColour")], "SSA border color is forced to black");
-            Equal("1", ssaValues[Array.IndexOf(ssaFields, "Outline")], "SSA border width is forced to one");
+            Equal("0.1", ssaValues[Array.IndexOf(ssaFields, "Outline")], "SSA fallback border width is forced to 0.1");
         }
 
         private static void TestSubtitlePositionModes()
@@ -235,7 +244,7 @@ namespace EmbySubtitleOptimization.Tests
             var profile = ResolutionProfile.FromVideo(3840, 2160, new PluginOptions());
 
             var preserved = AssSubtitleOptimizer.Optimize(ass, profile, new PluginOptions(), "preserve-position");
-            True(preserved.Contains("{\\fs17}{\\an7\\pos(100,80)}定位字幕"), "default position mode preserves inline alignment and position");
+            True(preserved.Contains("{\\fnSource Han Sans SC\\fs17\\fsp0\\c&HFFFFFF&\\alpha&H00&\\b1\\i0\\3c&H000000&\\3a&H00&\\bord0.1}{\\an7\\pos(100,80)}定位字幕"), "default position mode applies configured style while preserving inline alignment and position");
             True(preserved.Contains(",Default,,11,22,33,,"), "default position mode preserves Dialogue margins");
             True(preserved.Contains(",7,10,20,30,1"), "default position mode preserves Style alignment and margins");
 
@@ -316,7 +325,7 @@ namespace EmbySubtitleOptimization.Tests
                 var processor = new SubtitleFileProcessor();
                 var options = new PluginOptions();
                 True(processor.Process(source, target, 3840, 2160, options).Changed, "first file processing writes output");
-                True(File.ReadAllText(target).Contains("revision=14"), "file marker records processing revision");
+                True(File.ReadAllText(target).Contains("revision=16"), "file marker records processing revision");
                 True(File.ReadAllText(target).Contains("profile=4K"), "file marker records resolution profile");
                 True(!processor.Process(source, target, 3840, 2160, options).Changed, "unchanged file is skipped");
 

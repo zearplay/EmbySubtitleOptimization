@@ -118,8 +118,21 @@ namespace EmbySubtitleOptimization
                 options.MaxLineWidth1080P = 80;
             }
 
+            if (options.SettingsSchemaVersion < 6)
+            {
+                if (options.PrimaryBorderWidth == 1)
+                {
+                    options.PrimaryBorderWidth = 0.1;
+                }
+
+                if (options.SecondaryBorderWidth == 1)
+                {
+                    options.SecondaryBorderWidth = 0.1;
+                }
+            }
+
             options.FontName = null;
-            options.SettingsSchemaVersion = 5;
+            options.SettingsSchemaVersion = 6;
         }
     }
 }

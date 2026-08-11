@@ -237,10 +237,13 @@ namespace EmbySubtitleOptimization.Subtitles
                     {
                         outputValues[fieldIndex] = "&H00000000";
                     }
-                    else if (outputFields[fieldIndex].Equals("BorderStyle", StringComparison.OrdinalIgnoreCase)
-                             || outputFields[fieldIndex].Equals("Outline", StringComparison.OrdinalIgnoreCase))
+                    else if (outputFields[fieldIndex].Equals("BorderStyle", StringComparison.OrdinalIgnoreCase))
                     {
                         outputValues[fieldIndex] = "1";
+                    }
+                    else if (outputFields[fieldIndex].Equals("Outline", StringComparison.OrdinalIgnoreCase))
+                    {
+                        outputValues[fieldIndex] = "0.1";
                     }
                     else
                     {

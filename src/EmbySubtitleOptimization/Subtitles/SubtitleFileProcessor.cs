@@ -7,7 +7,7 @@ namespace EmbySubtitleOptimization.Subtitles
 {
     internal sealed class SubtitleFileProcessor
     {
-        private const int ProcessingRevision = 14;
+        private const int ProcessingRevision = 16;
 
         public ProcessResult Process(string sourcePath, string targetPath, int videoWidth, int videoHeight, PluginOptions options)
         {
