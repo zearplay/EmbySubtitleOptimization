@@ -25,6 +25,7 @@ namespace EmbySubtitleOptimization.Subtitles
             var textIndex = 9;
             var styleIndex = 3;
             var effectIndex = 8;
+            var marginVIndex = 7;
             var fieldCount = 10;
 
             for (var index = 0; index < lines.Count; index++)
@@ -55,6 +56,7 @@ namespace EmbySubtitleOptimization.Subtitles
                     textIndex = Array.FindIndex(fields, field => field.Equals("Text", StringComparison.OrdinalIgnoreCase));
                     styleIndex = Array.FindIndex(fields, field => field.Equals("Style", StringComparison.OrdinalIgnoreCase));
                     effectIndex = Array.FindIndex(fields, field => field.Equals("Effect", StringComparison.OrdinalIgnoreCase));
+                    marginVIndex = Array.FindIndex(fields, field => field.Equals("MarginV", StringComparison.OrdinalIgnoreCase));
                     if (textIndex < 0) textIndex = fields.Length - 1;
                     continue;
                 }
@@ -83,7 +85,16 @@ namespace EmbySubtitleOptimization.Subtitles
                 var formattedText = SubtitleStyleFormatter.FormatAndOptimize(originalText, profile, options, null, fontSize);
                 if (options.PositionMode == SubtitlePositionMode.BottomCenter && !isSpecialEffect)
                 {
-                    formattedText = ForceBottomCenter(formattedText, scriptWidth, scriptHeight, profile, options.BottomDistance1080P);
+                    var bottomMargin = CalculateBottomMargin(scriptHeight, profile, options.BottomDistance1080P);
+                    if (marginVIndex >= 0 && fieldsInEvent.Length > marginVIndex)
+                    {
+                        fieldsInEvent[marginVIndex] = Math.Max(1, bottomMargin).ToString(CultureInfo.InvariantCulture);
+                        formattedText = ForceBottomCenter(formattedText);
+                    }
+                    else
+                    {
+                        formattedText = ForceBottomCenterWithPosition(formattedText, scriptWidth, scriptHeight, bottomMargin);
+                    }
                 }
 
                 fieldsInEvent[textIndex] = formattedText;
@@ -119,25 +130,38 @@ namespace EmbySubtitleOptimization.Subtitles
             return Math.Max(1, fallback);
         }
 
-        private static string ForceBottomCenter(
-            string text,
-            int scriptWidth,
-            int scriptHeight,
-            ResolutionProfile profile,
-            int bottomDistance1080P)
+        private static string ForceBottomCenter(string text)
         {
             var withoutOriginalPosition = OverrideBlockRegex.Replace(text ?? string.Empty, match =>
             {
                 var tags = InlinePositionRegex.Replace(match.Groups["tags"].Value, string.Empty);
                 return tags.Length == 0 ? string.Empty : "{" + tags + "}";
             });
-            var videoDistance = profile.ScaleVerticalFrom1080(bottomDistance1080P);
-            var scaledDistance = (int)Math.Round(
-                videoDistance * scriptHeight / (double)profile.Height,
-                MidpointRounding.AwayFromZero);
+
+            return "{\\an2}" + withoutOriginalPosition;
+        }
+
+        private static string ForceBottomCenterWithPosition(
+            string text,
+            int scriptWidth,
+            int scriptHeight,
+            int bottomMargin)
+        {
+            var withoutOriginalPosition = ForceBottomCenter(text);
             var x = scriptWidth / 2;
-            var y = Math.Max(0, scriptHeight - scaledDistance);
-            return "{\\an2\\pos(" + x.ToString(CultureInfo.InvariantCulture) + "," + y.ToString(CultureInfo.InvariantCulture) + ")}" + withoutOriginalPosition;
+            var y = Math.Max(0, scriptHeight - bottomMargin);
+            return "{\\pos(" + x.ToString(CultureInfo.InvariantCulture) + "," + y.ToString(CultureInfo.InvariantCulture) + ")}" + withoutOriginalPosition;
+        }
+
+        private static int CalculateBottomMargin(
+            int scriptHeight,
+            ResolutionProfile profile,
+            int bottomDistance1080P)
+        {
+            var videoDistance = profile.ScaleVerticalFrom1080(bottomDistance1080P);
+            return Math.Max(0, (int)Math.Round(
+                videoDistance * scriptHeight / (double)profile.Height,
+                MidpointRounding.AwayFromZero));
         }
 
         private static IReadOnlyDictionary<string, double> ReadStyleFontSizes(IReadOnlyList<string> lines)

@@ -45,7 +45,7 @@ namespace EmbySubtitleOptimization
             SecondaryCharacterSpacing = 0;
             BilingualLineSpacing = 0;
             PositionMode = SubtitlePositionMode.PreserveOriginal;
-            BottomDistance1080P = 60;
+            BottomDistance1080P = 20;
             OutputSuffix = "optimized";
         }
 
@@ -92,7 +92,7 @@ namespace EmbySubtitleOptimization
         public SubtitlePositionMode PositionMode { get; set; }
 
         [DisplayName("距最底部距离")]
-        [Description("仅在“最底部居中”时生效。以 1920×1080 的画面高度为基准，所有分辨率均按“设置值 × 实际高度 ÷ 1080”换算。默认值为 60。")]
+        [Description("仅在“最底部居中”时生效。以 1920×1080 的画面高度为基准，所有分辨率均按“设置值 × 实际高度 ÷ 1080”换算。默认值为 20。")]
         public int BottomDistance1080P { get; set; }
 
         [DisplayName("输出文件后缀")]

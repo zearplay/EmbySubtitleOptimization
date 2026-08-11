@@ -91,6 +91,7 @@ namespace EmbySubtitleOptimization.Tests
             Equal(0, options.BilingualLineSpacing, "bilingual spacing defaults to zero");
             Equal(0.1d, options.PrimaryBorderWidth, "primary border width defaults to 0.1");
             Equal(0.1d, options.SecondaryBorderWidth, "secondary border width defaults to 0.1");
+            Equal(20, options.BottomDistance1080P, "bottom distance defaults to 20");
         }
 
         private static void TestCjkWidthAndWrapping()
@@ -261,7 +262,9 @@ namespace EmbySubtitleOptimization.Tests
             var bottomRegularLine = bottom.Split('\n').Single(line => line.StartsWith("Dialogue:", StringComparison.Ordinal) && line.Contains("普通对白"));
             True(bottomSpecialLine.Contains("\\an7\\pos(100,80)"), "bottom-center mode preserves special-effect subtitle positioning");
             True(!bottomSpecialLine.Contains("\\an2\\pos(192,272)"), "bottom-center mode is not applied to special-effect subtitles");
-            True(bottomRegularLine.Contains("{\\an2\\pos(192,272)}"), "bottom-center mode scales regular dialogue distance to the ASS canvas");
+            True(bottomSpecialLine.Contains(",11,22,33,,"), "bottom-center mode preserves special-effect Dialogue margins");
+            True(bottomRegularLine.Contains(",0,0,16,,{\\an2}"), "bottom-center mode uses bottom alignment and a scaled Dialogue margin");
+            True(!bottomRegularLine.Contains("\\pos("), "bottom-center mode avoids absolute positioning for regular dialogue");
 
             const string srt = "1\n00:00:01,000 --> 00:00:02,000\n测试字幕";
             var assWithoutScriptResolution = ass
@@ -313,8 +316,11 @@ namespace EmbySubtitleOptimization.Tests
                     "position-test");
                 True(
                     optimizedAss.Contains(
-                        "{\\an2\\pos(" + (resolution.Width / 2) + "," + (resolution.Height - resolution.ExpectedDistance) + ")}"),
-                    resolution.Name + " ASS position uses the scaled bottom distance");
+                        ",0,0," + Math.Max(1, resolution.ExpectedDistance) + ",,{\\an2}"),
+                    resolution.Name + " ASS position uses bottom alignment and the scaled Dialogue margin");
+                True(
+                    !optimizedAss.Split('\n').Single(line => line.Contains("普通对白")).Contains("\\pos("),
+                    resolution.Name + " ASS regular dialogue does not use an absolute position");
             }
         }
 
@@ -331,7 +337,7 @@ namespace EmbySubtitleOptimization.Tests
                 var processor = new SubtitleFileProcessor();
                 var options = new PluginOptions();
                 True(processor.Process(source, target, 3840, 2160, options).Changed, "first file processing writes output");
-                True(File.ReadAllText(target).Contains("revision=17"), "file marker records processing revision");
+                True(File.ReadAllText(target).Contains("revision=19"), "file marker records processing revision");
                 True(File.ReadAllText(target).Contains("profile=4K"), "file marker records resolution profile");
                 True(!processor.Process(source, target, 3840, 2160, options).Changed, "unchanged file is skipped");
 

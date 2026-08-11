@@ -131,8 +131,13 @@ namespace EmbySubtitleOptimization
                 }
             }
 
+            if (options.SettingsSchemaVersion < 7 && options.BottomDistance1080P == 60)
+            {
+                options.BottomDistance1080P = 20;
+            }
+
             options.FontName = null;
-            options.SettingsSchemaVersion = 6;
+            options.SettingsSchemaVersion = 7;
         }
     }
 }
