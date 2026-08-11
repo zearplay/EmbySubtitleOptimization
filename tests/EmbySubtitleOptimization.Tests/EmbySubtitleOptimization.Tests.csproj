@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>EmbySubtitleOptimization.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/EmbySubtitleOptimization/Subtitles/TextLayout.cs" Link="Subtitles/TextLayout.cs" />
+    <Compile Include="../../src/EmbySubtitleOptimization/Subtitles/ResolutionProfile.cs" Link="Subtitles/ResolutionProfile.cs" />
+    <Compile Include="../../src/EmbySubtitleOptimization/Subtitles/AssSubtitleOptimizer.cs" Link="Subtitles/AssSubtitleOptimizer.cs" />
+    <Compile Include="../../src/EmbySubtitleOptimization/Subtitles/SrtSubtitleConverter.cs" Link="Subtitles/SrtSubtitleConverter.cs" />
+    <Compile Include="../../src/EmbySubtitleOptimization/Subtitles/SubtitleStyleFormatter.cs" Link="Subtitles/SubtitleStyleFormatter.cs" />
+    <Compile Include="../../src/EmbySubtitleOptimization/Subtitles/SubtitleFileProcessor.cs" Link="Subtitles/SubtitleFileProcessor.cs" />
+    <Compile Include="../../src/EmbySubtitleOptimization/SubtitleFontStyle.cs" Link="SubtitleFontStyle.cs" />
+  </ItemGroup>
+</Project>

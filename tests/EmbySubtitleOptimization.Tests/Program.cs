@@ -1,0 +1,192 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using EmbySubtitleOptimization.Subtitles;
+
+namespace EmbySubtitleOptimization.Tests
+{
+    internal static class Program
+    {
+        private static int failures;
+
+        private static int Main()
+        {
+            TestResolutionProfiles();
+            TestCjkWidthAndWrapping();
+            TestBilingualHasNoHorizontalScale();
+            TestSingleAndBilingualStyles();
+            TestSpecialEffectsArePreserved();
+            TestSrtConversion();
+            TestAssEventWithCommas();
+            TestFileProcessingIsIncremental();
+
+            Console.WriteLine(failures == 0 ? "All subtitle optimizer tests passed." : failures + " test(s) failed.");
+            return failures == 0 ? 0 : 1;
+        }
+
+        private static void TestResolutionProfiles()
+        {
+            var options = new PluginOptions();
+            Equal("1080p", ResolutionProfile.FromVideo(1920, 1080, options).Name, "1080p profile");
+            Equal("2K", ResolutionProfile.FromVideo(2560, 1440, options).Name, "2K profile");
+            Equal("4K", ResolutionProfile.FromVideo(3840, 2160, options).Name, "4K profile");
+            Equal(17d, options.CommonFontSize, "common Fontsize defaults to 17");
+            Equal("Source Han Sans SC", options.PrimaryFontName, "primary font defaults to Source Han Sans SC");
+            Equal(70, options.SecondaryFontSizePercent, "secondary Fontsize ratio defaults to 70 percent");
+            Equal(0, options.BilingualLineSpacing, "bilingual spacing defaults to zero");
+        }
+
+        private static void TestCjkWidthAndWrapping()
+        {
+            Equal(8, TextLayout.Measure("测试ABcd"), "CJK visual width");
+            var wrapped = TextLayout.WrapLine("这是一条非常非常长的中文字幕，需要自动换行。", 20);
+            True(wrapped.Count >= 2, "long CJK line wraps");
+            True(wrapped.All(line => TextLayout.Measure(line) <= 22), "wrapped CJK lines stay near limit");
+        }
+
+        private static void TestBilingualHasNoHorizontalScale()
+        {
+            var value = TextLayout.OptimizeAssText(
+                "很短的中文\\NThis English subtitle line is considerably longer than the Chinese line",
+                100);
+            True(!value.Contains("\\fscx"), "bilingual text is not horizontally scaled");
+        }
+
+        private static void TestSpecialEffectsArePreserved()
+        {
+            const string input = "{\\pos(100,200)\\fs28\\bord2\\blur3\\3c&HFFFFFF&\\xshad1}这是一条不能被改写的超长定位字幕";
+            const string expected = "{\\fs17}{\\pos(100,200)}这是一条不能被改写的超长定位字幕";
+            var options = new PluginOptions();
+            var profile = ResolutionProfile.FromVideo(1920, 1080, options);
+            Equal(expected, SubtitleStyleFormatter.FormatAndOptimize(input, profile, options), "positioned ASS event keeps effects but inherits Style Fontsize");
+            Equal(
+                "{\\fs33}{\\i1}A{\\fsp1\\fscy90\\bord2}B",
+                SubtitleStyleFormatter.NormalizeInlineFontSize("{\\fs+4\\i1}A{\\fsp1\\fscy90\\fs-2\\bord2}B", 33),
+                "relative inline Fontsize is replaced by an effective leading fs tag without changing fsp or fscy");
+            Equal(
+                "{\\1c&H112233&\\fsp1}允许标签",
+                SubtitleStyleFormatter.RemoveForbiddenInlineTags("{\\2c&HFFFFFF&\\3c&H000000&\\4c&H111111&\\blur2\\be1\\shad3\\xbord2\\bord1\\xshad4\\yshad-1\\fscx90\\fscy80\\1c&H112233&\\fsp1}允许标签"),
+                "forbidden inline effects are removed while allowed tags remain");
+        }
+
+        private static void TestSingleAndBilingualStyles()
+        {
+            var options = new PluginOptions
+            {
+                PrimarySubtitleColor = "#FF0000",
+                PrimaryFontName = "Source Han Sans SC",
+                PrimaryFontStyle = SubtitleFontStyle.BoldItalic,
+                SecondarySubtitleColor = "#8000FF00",
+                SecondaryFontName = "Roboto",
+                SecondaryFontStyle = SubtitleFontStyle.Italic,
+                PrimaryCharacterSpacing = 1.5,
+                SecondaryCharacterSpacing = -0.5,
+                CommonFontSize = 50,
+                BilingualLineSpacing = 10
+            };
+            var profile = ResolutionProfile.FromVideo(1920, 1080, options);
+
+            var single = SubtitleStyleFormatter.FormatAndOptimize("单行字幕", profile, options);
+            True(single.StartsWith("{\\fnSource Han Sans SC\\fs50\\fsp1.5\\c&H0000FF&\\alpha&H00&\\b1\\i1}", StringComparison.Ordinal), "single subtitle uses common Fontsize and primary settings");
+
+            var bilingual = SubtitleStyleFormatter.FormatAndOptimize("主中文字幕\\N{\\rEng}A much longer secondary English subtitle", profile, options);
+            True(bilingual.Contains("\\fnSource Han Sans SC\\fs50\\fsp1.5\\c&H0000FF&\\alpha&H00&\\b1\\i1"), "primary subtitle uses 100 percent of common Fontsize");
+            True(bilingual.Contains("\\fnRoboto\\fs35\\fsp-0.5\\c&H00FF00&\\alpha&H7F&\\b0\\i1"), "secondary subtitle uses 70 percent of common Fontsize");
+            True(!bilingual.Contains("\\rEng"), "inline Style reset cannot override the configured secondary Fontsize");
+            True(!bilingual.Contains("\\fscx"), "styled bilingual subtitle has no horizontal scale override");
+            True(bilingual.Contains("{\\fs10}\\h{\\r}\\N"), "bilingual line gap uses Fontsize without ScaleY");
+        }
+
+        private static void TestSrtConversion()
+        {
+            const string srt = "1\n00:00:01,000 --> 00:00:03,250\n<i>这是一条很长很长的中文字幕，需要换行显示。</i>\n\n2\n00:00:04,000 --> 00:00:05,000\n主字幕\nSecondary subtitle";
+            var options = new PluginOptions
+            {
+                MaxLineWidth1080P = 20,
+                PrimaryFontName = "Arial",
+                SecondaryFontName = "Helvetica",
+                SrtDefaultFontName = "Verdana",
+                CommonFontSize = 52,
+                PrimaryCharacterSpacing = 1.25,
+                SecondaryCharacterSpacing = -0.5
+            };
+            var output = SrtSubtitleConverter.Convert(srt, ResolutionProfile.FromVideo(1920, 1080, options), options, "test-marker");
+            True(output.Contains("PlayResX: 1920"), "SRT output uses video resolution");
+            True(output.Contains("Style: ESO,Verdana,52"), "SRT ASS style uses selected font and common Fontsize");
+            True(output.Contains("Format: Name, Fontname, Fontsize, PrimaryColour, Bold, Italic, Underline, StrikeOut, Spacing, Angle, Alignment, MarginL, MarginR, MarginV, Encoding"), "SRT ASS style uses the reduced field list");
+            True(output.Contains("Style: ESO,Verdana,52,&H00FFFFFF,0,0,0,0,1.25,0,2,"), "SRT ASS style writes only allowed fields");
+            True(!output.Contains("ScaledBorderAndShadow"), "SRT ASS omits ScaledBorderAndShadow");
+            True(output.Contains("{\\fnVerdana\\fs52\\fsp1.25"), "single SRT cue uses common Fontsize");
+            True(output.Contains("{\\fnArial\\fs52\\fsp1.25"), "bilingual SRT primary line uses common Fontsize");
+            True(output.Contains("{\\fnHelvetica\\fs36.4\\fsp-0.5"), "bilingual SRT secondary line uses its percentage of common Fontsize");
+            Equal(2, output.Split('\n').Count(line => line.StartsWith("Dialogue:", StringComparison.Ordinal)), "all SRT cues convert");
+            True(output.Contains("{\\i1}"), "SRT italic markup converts");
+            True(output.Contains("\\N"), "long SRT cue wraps");
+        }
+
+        private static void TestAssEventWithCommas()
+        {
+            const string ass = "[Script Info]\nScriptType: v4.00+\nPlayResY: 288\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,33,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,{\\bord2\\blur1}这是带有逗号,而且非常长的字幕\\N{\\fs22\\4c&HFFFFFF&\\yshad2}English subtitle";
+            var options = new PluginOptions { MaxLineWidth1080P = 20, CommonFontSize = 0, BilingualLineSpacing = 0 };
+            var output = AssSubtitleOptimizer.Optimize(ass, ResolutionProfile.FromVideo(1920, 1080, options), options, "test-marker");
+            True(output.Contains("逗号,"), "comma in ASS text is preserved");
+            True(output.Contains("Style: Default,Arial,33,"), "ASS Style Fontsize is preserved");
+            True(!output.Contains("SecondaryColour") && !output.Contains("OutlineColour") && !output.Contains("BackColour"), "ASS color effect fields are removed");
+            True(!output.Contains("ScaleX") && !output.Contains("ScaleY"), "ASS scale fields are removed");
+            True(!output.Contains("BorderStyle") && !output.Contains("Outline") && !output.Contains("Shadow"), "ASS border and shadow fields are removed");
+            True(!output.Contains("{\\fs22}English subtitle"), "original inline ASS Fontsize is replaced");
+            True(output.Contains("\\fs33"), "primary subtitle uses 100 percent of Style Fontsize");
+            True(output.Contains("\\fs23.1"), "secondary subtitle uses 70 percent of Style Fontsize");
+            Equal(2, Regex.Matches(output, @"\\fs(?![pc])(?:\d|\.)").Count, "bilingual lines have independent fs tags");
+            True(!Regex.IsMatch(output, @"\\(?:2c|3c|4c|blur|be|shad|xbord|bord|xshad|yshad|fscx|fscy)(?![a-z])", RegexOptions.IgnoreCase), "forbidden inline tags are absent from optimized ASS");
+            True(output.Contains("\\N"), "ASS dialogue wraps");
+            True(output.Contains("test-marker"), "generation marker is added");
+        }
+
+        private static void TestFileProcessingIsIncremental()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "eso-tests-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            try
+            {
+                var source = Path.Combine(directory, "movie.zh.srt");
+                var target = Path.Combine(directory, "movie.zh.optimized.ass");
+                File.WriteAllText(source, "1\n00:00:01,000 --> 00:00:02,000\n测试字幕");
+
+                var processor = new SubtitleFileProcessor();
+                var options = new PluginOptions();
+                True(processor.Process(source, target, 3840, 2160, options).Changed, "first file processing writes output");
+                True(File.ReadAllText(target).Contains("revision=2"), "file marker records processing revision");
+                True(File.ReadAllText(target).Contains("profile=4K"), "file marker records resolution profile");
+                True(!processor.Process(source, target, 3840, 2160, options).Changed, "unchanged file is skipped");
+
+                options.MaxLineWidth4K++;
+                True(processor.Process(source, target, 3840, 2160, options).Changed, "settings change regenerates output");
+            }
+            finally
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+
+        private static void Equal<T>(T expected, T actual, string name)
+        {
+            if (!Equals(expected, actual))
+            {
+                failures++;
+                Console.Error.WriteLine("FAIL " + name + ": expected=" + expected + ", actual=" + actual);
+            }
+        }
+
+        private static void True(bool value, string name)
+        {
+            if (!value)
+            {
+                failures++;
+                Console.Error.WriteLine("FAIL " + name);
+            }
+        }
+
+    }
+}
