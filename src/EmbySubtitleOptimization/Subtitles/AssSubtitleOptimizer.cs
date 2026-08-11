@@ -26,6 +26,8 @@ namespace EmbySubtitleOptimization.Subtitles
             var textIndex = 9;
             var styleIndex = 3;
             var effectIndex = 8;
+            var marginLIndex = 5;
+            var marginRIndex = 6;
             var marginVIndex = 7;
             var fieldCount = 10;
 
@@ -57,6 +59,8 @@ namespace EmbySubtitleOptimization.Subtitles
                     textIndex = Array.FindIndex(fields, field => field.Equals("Text", StringComparison.OrdinalIgnoreCase));
                     styleIndex = Array.FindIndex(fields, field => field.Equals("Style", StringComparison.OrdinalIgnoreCase));
                     effectIndex = Array.FindIndex(fields, field => field.Equals("Effect", StringComparison.OrdinalIgnoreCase));
+                    marginLIndex = Array.FindIndex(fields, field => field.Equals("MarginL", StringComparison.OrdinalIgnoreCase));
+                    marginRIndex = Array.FindIndex(fields, field => field.Equals("MarginR", StringComparison.OrdinalIgnoreCase));
                     marginVIndex = Array.FindIndex(fields, field => field.Equals("MarginV", StringComparison.OrdinalIgnoreCase));
                     if (textIndex < 0) textIndex = fields.Length - 1;
                     continue;
@@ -96,10 +100,16 @@ namespace EmbySubtitleOptimization.Subtitles
                             var primaryFields = (string[])fieldsInEvent.Clone();
                             var secondaryFields = (string[])fieldsInEvent.Clone();
                             var gap = CalculateBilingualGap(scriptHeight, profile, options.BilingualLineSpacing);
-                            var primaryMargin = bottomMargin + CalculateBlockHeight(formatted.SecondaryFontSize, formatted.SecondaryLineCount) + gap;
-                            primaryFields[marginVIndex] = Math.Max(1, primaryMargin).ToString(CultureInfo.InvariantCulture);
-                            primaryFields[textIndex] = ForceBottomCenter(formatted.PrimaryText);
-                            secondaryFields[textIndex] = ForceBottomCenter(formatted.SecondaryText);
+                            var boundaryY = Math.Max(
+                                0,
+                                scriptHeight
+                                - bottomMargin
+                                - CalculateBlockHeight(formatted.SecondaryFontSize, formatted.SecondaryLineCount)
+                                - gap);
+                            ClearEventMargins(primaryFields, marginLIndex, marginRIndex, marginVIndex);
+                            ClearEventMargins(secondaryFields, marginLIndex, marginRIndex, marginVIndex);
+                            primaryFields[textIndex] = ForcePosition(formatted.PrimaryText, 2, scriptWidth / 2, boundaryY);
+                            secondaryFields[textIndex] = ForcePosition(formatted.SecondaryText, 8, scriptWidth / 2, boundaryY + gap);
                             lines[index] = BuildEventLine(lines[index], prefixLength, primaryFields);
                             lines.Insert(index + 1, BuildEventLine(lines[index], prefixLength, secondaryFields));
                             index++;
@@ -119,29 +129,33 @@ namespace EmbySubtitleOptimization.Subtitles
                     && marginVIndex >= 0
                     && fieldsInEvent.Length > marginVIndex
                     && stylePositions.TryGetValue(styleName, out var stylePosition)
-                    && (IsBottomAligned(stylePosition.Alignment) || IsTopAligned(stylePosition.Alignment)))
+                    && stylePosition.Alignment >= 1
+                    && stylePosition.Alignment <= 9)
                 {
                     var primaryFields = (string[])fieldsInEvent.Clone();
                     var secondaryFields = (string[])fieldsInEvent.Clone();
-                    var effectiveMargin = ReadEventMargin(fieldsInEvent[marginVIndex], stylePosition.MarginV);
+                    var effectiveMarginL = ReadEventMargin(fieldsInEvent, marginLIndex, stylePosition.MarginL);
+                    var effectiveMarginR = ReadEventMargin(fieldsInEvent, marginRIndex, stylePosition.MarginR);
+                    var effectiveMarginV = ReadEventMargin(fieldsInEvent, marginVIndex, stylePosition.MarginV);
                     var gap = CalculateBilingualGap(scriptHeight, profile, options.BilingualLineSpacing);
-                    if (IsBottomAligned(stylePosition.Alignment))
-                    {
-                        primaryFields[marginVIndex] = Math.Max(
-                                1,
-                                effectiveMargin + CalculateBlockHeight(formatted.SecondaryFontSize, formatted.SecondaryLineCount) + gap)
-                            .ToString(CultureInfo.InvariantCulture);
-                    }
-                    else
-                    {
-                        secondaryFields[marginVIndex] = Math.Max(
-                                1,
-                                effectiveMargin + CalculateBlockHeight(formatted.PrimaryFontSize, formatted.PrimaryLineCount) + gap)
-                            .ToString(CultureInfo.InvariantCulture);
-                    }
+                    var primaryHeight = CalculateBlockHeight(formatted.PrimaryFontSize, formatted.PrimaryLineCount);
+                    var secondaryHeight = CalculateBlockHeight(formatted.SecondaryFontSize, formatted.SecondaryLineCount);
+                    var boundaryY = CalculateBoundaryY(
+                        stylePosition.Alignment,
+                        scriptHeight,
+                        effectiveMarginV,
+                        primaryHeight,
+                        secondaryHeight,
+                        gap);
+                    var horizontalIndex = (stylePosition.Alignment - 1) % 3;
+                    var x = CalculateHorizontalAnchor(horizontalIndex, scriptWidth, effectiveMarginL, effectiveMarginR);
+                    var primaryAlignment = horizontalIndex + 1;
+                    var secondaryAlignment = horizontalIndex + 7;
 
-                    primaryFields[textIndex] = formatted.PrimaryText;
-                    secondaryFields[textIndex] = formatted.SecondaryText;
+                    ClearEventMargins(primaryFields, marginLIndex, marginRIndex, marginVIndex);
+                    ClearEventMargins(secondaryFields, marginLIndex, marginRIndex, marginVIndex);
+                    primaryFields[textIndex] = ForcePosition(formatted.PrimaryText, primaryAlignment, x, boundaryY);
+                    secondaryFields[textIndex] = ForcePosition(formatted.SecondaryText, secondaryAlignment, x, boundaryY + gap);
                     lines[index] = BuildEventLine(lines[index], prefixLength, primaryFields);
                     lines.Insert(index + 1, BuildEventLine(lines[index], prefixLength, secondaryFields));
                     index++;
@@ -204,6 +218,19 @@ namespace EmbySubtitleOptimization.Subtitles
             return "{\\pos(" + x.ToString(CultureInfo.InvariantCulture) + "," + y.ToString(CultureInfo.InvariantCulture) + ")}" + withoutOriginalPosition;
         }
 
+        private static string ForcePosition(string text, int alignment, int x, int y)
+        {
+            var withoutOriginalPosition = OverrideBlockRegex.Replace(text ?? string.Empty, match =>
+            {
+                var tags = InlinePositionRegex.Replace(match.Groups["tags"].Value, string.Empty);
+                return tags.Length == 0 ? string.Empty : "{" + tags + "}";
+            });
+            return "{\\an" + alignment.ToString(CultureInfo.InvariantCulture)
+                   + "\\pos(" + x.ToString(CultureInfo.InvariantCulture)
+                   + "," + Math.Max(0, y).ToString(CultureInfo.InvariantCulture)
+                   + ")}" + withoutOriginalPosition;
+        }
+
         private static int CalculateBottomMargin(
             int scriptHeight,
             ResolutionProfile profile,
@@ -232,12 +259,52 @@ namespace EmbySubtitleOptimization.Subtitles
             return Math.Max(1, (int)Math.Round(fontSize * Math.Max(1, lineCount), MidpointRounding.AwayFromZero));
         }
 
-        private static int ReadEventMargin(string value, int styleMargin)
+        private static int ReadEventMargin(string[] fields, int fieldIndex, int styleMargin)
         {
-            return int.TryParse(value?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var eventMargin)
+            if (fieldIndex < 0 || fields.Length <= fieldIndex) return Math.Max(0, styleMargin);
+            return int.TryParse(fields[fieldIndex]?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var eventMargin)
                    && eventMargin > 0
                 ? eventMargin
                 : Math.Max(0, styleMargin);
+        }
+
+        private static void ClearEventMargins(string[] fields, int marginLIndex, int marginRIndex, int marginVIndex)
+        {
+            if (marginLIndex >= 0 && fields.Length > marginLIndex) fields[marginLIndex] = "0";
+            if (marginRIndex >= 0 && fields.Length > marginRIndex) fields[marginRIndex] = "0";
+            if (marginVIndex >= 0 && fields.Length > marginVIndex) fields[marginVIndex] = "0";
+        }
+
+        private static int CalculateHorizontalAnchor(int horizontalIndex, int scriptWidth, int marginL, int marginR)
+        {
+            if (horizontalIndex == 0) return Math.Max(0, marginL);
+            if (horizontalIndex == 2) return Math.Max(0, scriptWidth - marginR);
+            return Math.Max(0, (int)Math.Round(
+                (marginL + scriptWidth - marginR) / 2.0,
+                MidpointRounding.AwayFromZero));
+        }
+
+        private static int CalculateBoundaryY(
+            int alignment,
+            int scriptHeight,
+            int marginV,
+            int primaryHeight,
+            int secondaryHeight,
+            int gap)
+        {
+            if (IsBottomAligned(alignment))
+            {
+                return Math.Max(0, scriptHeight - marginV - secondaryHeight - gap);
+            }
+
+            if (IsTopAligned(alignment))
+            {
+                return Math.Max(0, marginV + primaryHeight);
+            }
+
+            var blockHeight = primaryHeight + gap + secondaryHeight;
+            var top = (scriptHeight - blockHeight) / 2.0;
+            return Math.Max(0, (int)Math.Round(top + primaryHeight, MidpointRounding.AwayFromZero));
         }
 
         private static string BuildEventLine(string sourceLine, int prefixLength, string[] fields)
@@ -304,6 +371,8 @@ namespace EmbySubtitleOptimization.Subtitles
             var fieldCount = 23;
             var nameIndex = 0;
             var alignmentIndex = 18;
+            var marginLIndex = 19;
+            var marginRIndex = 20;
             var marginVIndex = 21;
 
             foreach (var line in lines)
@@ -323,6 +392,8 @@ namespace EmbySubtitleOptimization.Subtitles
                     fieldCount = fields.Length;
                     nameIndex = Array.FindIndex(fields, field => field.Equals("Name", StringComparison.OrdinalIgnoreCase));
                     alignmentIndex = Array.FindIndex(fields, field => field.Equals("Alignment", StringComparison.OrdinalIgnoreCase));
+                    marginLIndex = Array.FindIndex(fields, field => field.Equals("MarginL", StringComparison.OrdinalIgnoreCase));
+                    marginRIndex = Array.FindIndex(fields, field => field.Equals("MarginR", StringComparison.OrdinalIgnoreCase));
                     marginVIndex = Array.FindIndex(fields, field => field.Equals("MarginV", StringComparison.OrdinalIgnoreCase));
                     continue;
                 }
@@ -331,8 +402,12 @@ namespace EmbySubtitleOptimization.Subtitles
                 var values = trimmed.Substring(6).TrimStart().Split(new[] { ',' }, fieldCount);
                 if (nameIndex < 0
                     || alignmentIndex < 0
+                    || marginLIndex < 0
+                    || marginRIndex < 0
                     || marginVIndex < 0
-                    || values.Length <= Math.Max(nameIndex, Math.Max(alignmentIndex, marginVIndex)))
+                    || values.Length <= Math.Max(
+                        nameIndex,
+                        Math.Max(alignmentIndex, Math.Max(marginLIndex, Math.Max(marginRIndex, marginVIndex)))))
                 {
                     continue;
                 }
@@ -343,8 +418,12 @@ namespace EmbySubtitleOptimization.Subtitles
                 }
 
                 int.TryParse(values[marginVIndex].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var marginV);
+                int.TryParse(values[marginLIndex].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var marginL);
+                int.TryParse(values[marginRIndex].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var marginR);
                 result[values[nameIndex].Trim()] = new StylePosition(
                     legacyStyleSection ? ConvertLegacyAlignment(alignment) : alignment,
+                    marginL,
+                    marginR,
                     marginV);
             }
 
@@ -521,13 +600,17 @@ namespace EmbySubtitleOptimization.Subtitles
 
         private sealed class StylePosition
         {
-            public StylePosition(int alignment, int marginV)
+            public StylePosition(int alignment, int marginL, int marginR, int marginV)
             {
                 Alignment = alignment;
+                MarginL = marginL;
+                MarginR = marginR;
                 MarginV = marginV;
             }
 
             public int Alignment { get; }
+            public int MarginL { get; }
+            public int MarginR { get; }
             public int MarginV { get; }
         }
 

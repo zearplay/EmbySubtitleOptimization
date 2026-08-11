@@ -155,7 +155,7 @@ namespace EmbySubtitleOptimization.Subtitles
             {
                 var tags = InlineStyleResetRegex.Replace(
                     match.Groups["tags"].Value,
-                    reset => reset.Value + overrideTags);
+                    reset => "\\r" + overrideTags);
                 return "{" + tags + "}";
             });
         }

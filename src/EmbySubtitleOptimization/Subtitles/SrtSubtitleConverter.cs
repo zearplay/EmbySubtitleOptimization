@@ -37,11 +37,15 @@ namespace EmbySubtitleOptimization.Subtitles
                         ? profile.ScaleVerticalFrom1080(options.BottomDistance1080P)
                         : profile.MarginV;
                     var gap = profile.ScaleVerticalFrom1080(options.BilingualLineSpacing);
-                    var primaryMargin = baseMargin
-                                        + CalculateBlockHeight(formatted.SecondaryFontSize, formatted.SecondaryLineCount)
-                                        + gap;
-                    AppendDialogue(builder, cue, Math.Max(1, primaryMargin), formatted.PrimaryText);
-                    AppendDialogue(builder, cue, 0, formatted.SecondaryText);
+                    var boundaryY = Math.Max(
+                        0,
+                        profile.Height
+                        - baseMargin
+                        - CalculateBlockHeight(formatted.SecondaryFontSize, formatted.SecondaryLineCount)
+                        - gap);
+                    var centerX = profile.Width / 2;
+                    AppendDialogue(builder, cue, 0, ForcePosition(formatted.PrimaryText, 2, centerX, boundaryY));
+                    AppendDialogue(builder, cue, 0, ForcePosition(formatted.SecondaryText, 8, centerX, boundaryY + gap));
                     continue;
                 }
 
@@ -66,6 +70,14 @@ namespace EmbySubtitleOptimization.Subtitles
         private static int CalculateBlockHeight(double fontSize, int lineCount)
         {
             return Math.Max(1, (int)Math.Round(fontSize * Math.Max(1, lineCount), MidpointRounding.AwayFromZero));
+        }
+
+        private static string ForcePosition(string text, int alignment, int x, int y)
+        {
+            return "{\\an" + alignment.ToString(CultureInfo.InvariantCulture)
+                   + "\\pos(" + x.ToString(CultureInfo.InvariantCulture)
+                   + "," + Math.Max(0, y).ToString(CultureInfo.InvariantCulture)
+                   + ")}" + text;
         }
 
         private static IEnumerable<Cue> ParseCues(string content)

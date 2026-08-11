@@ -165,7 +165,7 @@ namespace EmbySubtitleOptimization.Tests
             True(bilingual.Contains("\\fnRoboto\\fs35\\fsp-0.5\\c&H00FF00&\\alpha&H7F&\\b0\\i1"), "secondary subtitle uses 70 percent of common Fontsize");
             True(bilingual.Contains("\\3c&H332211&\\3a&H00&\\bord1.5"), "primary subtitle uses its configured outer border");
             True(bilingual.Contains("\\3c&H665544&\\3a&H7F&\\bord2.25"), "secondary subtitle uses its configured outer border");
-            True(bilingual.Contains("\\rEng\\fnRoboto\\fs35"), "configured secondary Fontsize is reapplied after the original Style reset");
+            True(bilingual.Contains("\\r\\fnRoboto\\fs35"), "named Style reset is normalized before configured secondary Fontsize is reapplied");
             True(!bilingual.Contains("OriginalPrimary") && !bilingual.Contains("Microsoft YaHei"), "original inline fonts cannot override configured fonts");
             True(!bilingual.Contains("\\fs99") && !bilingual.Contains("\\fs88") && !bilingual.Contains("\\fsp9") && !bilingual.Contains("\\fsp8"), "original inline size and spacing cannot override configured values");
             True(!bilingual.Contains("&H123456&") && !bilingual.Contains("&HE8E8E8&") && !bilingual.Contains("\\alpha&H80&") && !bilingual.Contains("\\alpha&H40&"), "original inline colors cannot override configured colors");
@@ -199,8 +199,8 @@ namespace EmbySubtitleOptimization.Tests
             True(output.Contains("{\\fnArial\\fs52\\fsp1.25"), "bilingual SRT primary line uses common Fontsize");
             True(output.Contains("{\\fnHelvetica\\fs36.4\\fsp-0.5"), "bilingual SRT secondary line uses its percentage of common Fontsize");
             Equal(3, output.Split('\n').Count(line => line.StartsWith("Dialogue:", StringComparison.Ordinal)), "bilingual SRT cue is emitted as two synchronized events");
-            True(output.Contains(",ESO,ESO,0,0,126,,{\\fnArial\\fs52"), "SRT primary line is offset by the actual secondary Fontsize");
-            True(output.Contains(",ESO,ESO,0,0,0,,{\\fnHelvetica\\fs36.4"), "SRT secondary line keeps the configured bottom position");
+            True(output.Contains(",ESO,ESO,0,0,0,,{\\an2\\pos(960,954)}{\\fnArial\\fs52"), "SRT primary line uses the shared centered boundary");
+            True(output.Contains(",ESO,ESO,0,0,0,,{\\an8\\pos(960,954)}{\\fnHelvetica\\fs36.4"), "SRT secondary line uses the same centered boundary");
             True(!output.Contains("{\\i1}"), "SRT italic markup cannot override the configured font style");
             True(output.Contains("\\N"), "long SRT cue wraps");
         }
@@ -238,8 +238,8 @@ namespace EmbySubtitleOptimization.Tests
             True(output.Contains("\\N"), "ASS dialogue wraps");
             True(output.Contains("test-marker"), "generation marker is added");
             Equal(2, output.Split('\n').Count(line => line.StartsWith("Dialogue:", StringComparison.Ordinal)), "bilingual ASS cue is emitted as two synchronized events");
-            True(output.Contains(",Default,,0,0,33,,{\\fnSource Han Sans SC\\fs33"), "ASS primary line is offset by the rounded secondary Fontsize");
-            True(output.Contains(",Default,,0,0,0,,{\\fnArial\\fs23.1"), "ASS secondary line keeps the original Style margin");
+            True(output.Contains(",Default,,0,0,0,,{\\an2\\pos(960,255)}{\\fnSource Han Sans SC\\fs33"), "ASS primary line uses the shared centered boundary");
+            True(output.Contains(",Default,,0,0,0,,{\\an8\\pos(960,255)}{\\fnArial\\fs23.1"), "ASS secondary line uses the same centered boundary");
 
             var ssaOutput = AssSubtitleOptimizer.Optimize(
                 ass.Replace("[V4+ Styles]", "[V4 Styles]").Replace("OutlineColour", "TertiaryColour"),
@@ -272,10 +272,10 @@ namespace EmbySubtitleOptimization.Tests
             var dialogues = output.Split('\n').Where(line => line.StartsWith("Dialogue:", StringComparison.Ordinal)).ToArray();
 
             Equal(4, dialogues.Length, "each ordinary bilingual cue produces primary and secondary events");
-            True(dialogues[0].Contains(",Bottom,,0,0,70,,{\\fnSource Han Sans SC\\fs150"), "bottom primary offset uses the 50-point secondary block height");
-            True(dialogues[1].Contains(",Bottom,,0,0,0,,{\\fnArial\\fs50"), "bottom secondary preserves the 20-point Style margin");
-            True(dialogues[2].Contains(",Top,,0,0,0,,{\\fnSource Han Sans SC\\fs150"), "top primary preserves the Style margin");
-            True(dialogues[3].Contains(",Top,,0,0,170,,{\\fnArial\\fs50"), "top secondary offset uses the 150-point primary block height");
+            True(dialogues[0].Contains(",Bottom,,0,0,0,,{\\an2\\pos(960,1010)}{\\fnSource Han Sans SC\\fs150"), "bottom primary uses the top edge of the secondary block as its bottom anchor");
+            True(dialogues[1].Contains(",Bottom,,0,0,0,,{\\an8\\pos(960,1010)}{\\fnArial\\fs50"), "bottom secondary shares the primary boundary and horizontal center");
+            True(dialogues[2].Contains(",Top,,0,0,0,,{\\an2\\pos(960,170)}{\\fnSource Han Sans SC\\fs150"), "top primary ends at the shared boundary");
+            True(dialogues[3].Contains(",Top,,0,0,0,,{\\an8\\pos(960,170)}{\\fnArial\\fs50"), "top secondary begins at the shared boundary and horizontal center");
             True(dialogues.All(line => !line.Contains("\\N")), "short bilingual lines no longer depend on multiline line-height calculation");
         }
 
@@ -374,7 +374,7 @@ namespace EmbySubtitleOptimization.Tests
                 var processor = new SubtitleFileProcessor();
                 var options = new PluginOptions();
                 True(processor.Process(source, target, 3840, 2160, options).Changed, "first file processing writes output");
-                True(File.ReadAllText(target).Contains("revision=21"), "file marker records processing revision");
+                True(File.ReadAllText(target).Contains("revision=22"), "file marker records processing revision");
                 True(File.ReadAllText(target).Contains("profile=4K"), "file marker records resolution profile");
                 True(!processor.Process(source, target, 3840, 2160, options).Changed, "unchanged file is skipped");
 
