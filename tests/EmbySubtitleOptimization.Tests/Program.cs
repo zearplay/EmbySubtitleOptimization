@@ -124,6 +124,9 @@ namespace EmbySubtitleOptimization.Tests
                 "{\\1c&H112233&\\fsp1}允许标签",
                 SubtitleStyleFormatter.RemoveForbiddenInlineTags("{\\2c&HFFFFFF&\\3c&H000000&\\4c&H111111&\\blur2\\be1\\shad3\\xbord2\\bord1\\xshad4\\yshad-1\\fscx90\\fscy80\\1c&H112233&\\fsp1}允许标签"),
                 "forbidden inline effects are removed while allowed tags remain");
+            True(TextLayout.IsSpecialEffect("{\\t(0,500,\\frz360)}动画"), "transform animation is detected as a special effect");
+            True(TextLayout.IsSpecialEffect("{\\fad(200,300)}淡入淡出"), "fade is detected as a special effect");
+            True(TextLayout.IsSpecialEffect("{\\an8}顶部标牌"), "inline alignment is detected as a special effect");
         }
 
         private static void TestSingleAndBilingualStyles()
@@ -240,7 +243,7 @@ namespace EmbySubtitleOptimization.Tests
 
         private static void TestSubtitlePositionModes()
         {
-            const string ass = "[Script Info]\nScriptType: v4.00+\nPlayResX: 384\nPlayResY: 288\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, Bold, Italic, Underline, StrikeOut, Spacing, Angle, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,20,&H00FFFFFF,0,0,0,0,0,0,7,10,20,30,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:03.00,Default,,11,22,33,,{\\an7\\pos(100,80)}定位字幕";
+            const string ass = "[Script Info]\nScriptType: v4.00+\nPlayResX: 384\nPlayResY: 288\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, Bold, Italic, Underline, StrikeOut, Spacing, Angle, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,20,&H00FFFFFF,0,0,0,0,0,0,7,10,20,30,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:03.00,Default,,11,22,33,,{\\an7\\pos(100,80)}定位字幕\nDialogue: 0,0:00:04.00,0:00:06.00,Default,,0,0,0,,普通对白";
             var profile = ResolutionProfile.FromVideo(3840, 2160, new PluginOptions());
 
             var preserved = AssSubtitleOptimizer.Optimize(ass, profile, new PluginOptions(), "preserve-position");
@@ -254,8 +257,11 @@ namespace EmbySubtitleOptimization.Tests
                 BottomDistance1080P = 60
             };
             var bottom = AssSubtitleOptimizer.Optimize(ass, profile, bottomOptions, "bottom-center");
-            True(bottom.Contains("{\\an2\\pos(192,272)}"), "bottom-center mode scales the configured distance to the ASS canvas");
-            True(!bottom.Contains("\\an7") && !bottom.Contains("\\pos(100,80)"), "bottom-center mode replaces original inline positioning");
+            var bottomSpecialLine = bottom.Split('\n').Single(line => line.StartsWith("Dialogue:", StringComparison.Ordinal) && line.Contains("定位字幕"));
+            var bottomRegularLine = bottom.Split('\n').Single(line => line.StartsWith("Dialogue:", StringComparison.Ordinal) && line.Contains("普通对白"));
+            True(bottomSpecialLine.Contains("\\an7\\pos(100,80)"), "bottom-center mode preserves special-effect subtitle positioning");
+            True(!bottomSpecialLine.Contains("\\an2\\pos(192,272)"), "bottom-center mode is not applied to special-effect subtitles");
+            True(bottomRegularLine.Contains("{\\an2\\pos(192,272)}"), "bottom-center mode scales regular dialogue distance to the ASS canvas");
 
             const string srt = "1\n00:00:01,000 --> 00:00:02,000\n测试字幕";
             var assWithoutScriptResolution = ass
@@ -325,7 +331,7 @@ namespace EmbySubtitleOptimization.Tests
                 var processor = new SubtitleFileProcessor();
                 var options = new PluginOptions();
                 True(processor.Process(source, target, 3840, 2160, options).Changed, "first file processing writes output");
-                True(File.ReadAllText(target).Contains("revision=16"), "file marker records processing revision");
+                True(File.ReadAllText(target).Contains("revision=17"), "file marker records processing revision");
                 True(File.ReadAllText(target).Contains("profile=4K"), "file marker records resolution profile");
                 True(!processor.Process(source, target, 3840, 2160, options).Changed, "unchanged file is skipped");
 

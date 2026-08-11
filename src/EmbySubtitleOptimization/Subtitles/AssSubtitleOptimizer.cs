@@ -24,6 +24,7 @@ namespace EmbySubtitleOptimization.Subtitles
             var eventSection = false;
             var textIndex = 9;
             var styleIndex = 3;
+            var effectIndex = 8;
             var fieldCount = 10;
 
             for (var index = 0; index < lines.Count; index++)
@@ -53,6 +54,7 @@ namespace EmbySubtitleOptimization.Subtitles
                     fieldCount = fields.Length;
                     textIndex = Array.FindIndex(fields, field => field.Equals("Text", StringComparison.OrdinalIgnoreCase));
                     styleIndex = Array.FindIndex(fields, field => field.Equals("Style", StringComparison.OrdinalIgnoreCase));
+                    effectIndex = Array.FindIndex(fields, field => field.Equals("Effect", StringComparison.OrdinalIgnoreCase));
                     if (textIndex < 0) textIndex = fields.Length - 1;
                     continue;
                 }
@@ -69,12 +71,17 @@ namespace EmbySubtitleOptimization.Subtitles
                     continue;
                 }
 
+                var originalText = fieldsInEvent[textIndex];
+                var hasEventEffect = effectIndex >= 0
+                                     && fieldsInEvent.Length > effectIndex
+                                     && !string.IsNullOrWhiteSpace(fieldsInEvent[effectIndex]);
+                var isSpecialEffect = hasEventEffect || TextLayout.IsSpecialEffect(originalText);
                 var styleName = styleIndex >= 0 && fieldsInEvent.Length > styleIndex ? fieldsInEvent[styleIndex].Trim() : string.Empty;
                 var fontSize = styleFontSizes.TryGetValue(styleName, out var configuredFontSize)
                     ? configuredFontSize
                     : profile.FontSize;
-                var formattedText = SubtitleStyleFormatter.FormatAndOptimize(fieldsInEvent[textIndex], profile, options, null, fontSize);
-                if (options.PositionMode == SubtitlePositionMode.BottomCenter)
+                var formattedText = SubtitleStyleFormatter.FormatAndOptimize(originalText, profile, options, null, fontSize);
+                if (options.PositionMode == SubtitlePositionMode.BottomCenter && !isSpecialEffect)
                 {
                     formattedText = ForceBottomCenter(formattedText, scriptWidth, scriptHeight, profile, options.BottomDistance1080P);
                 }

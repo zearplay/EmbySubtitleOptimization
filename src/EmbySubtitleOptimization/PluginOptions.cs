@@ -88,7 +88,7 @@ namespace EmbySubtitleOptimization
         public int BilingualLineSpacing { get; set; }
 
         [DisplayName("字幕位置")]
-        [Description("默认不修改 ASS/SSA 的原始 Style、定位标签、对齐方式和边距；也可统一设置为最底部居中。")]
+        [Description("默认不修改 ASS/SSA 的原始 Style、定位标签、对齐方式和边距；也可将普通对白统一设置为最底部居中。特效字幕始终保留原位置。")]
         public SubtitlePositionMode PositionMode { get; set; }
 
         [DisplayName("距最底部距离")]

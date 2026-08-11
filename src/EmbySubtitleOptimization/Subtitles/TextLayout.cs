@@ -138,9 +138,11 @@ namespace EmbySubtitleOptimization.Subtitles
         internal static bool IsSpecialEffect(string text)
         {
             var lower = text.ToLowerInvariant();
-            return lower.Contains("\\pos(") || lower.Contains("\\move(") || lower.Contains("\\clip(")
-                   || lower.Contains("\\iclip(") || lower.Contains("\\p1") || lower.Contains("\\p2")
-                   || Regex.IsMatch(lower, @"\\k[fo]?\d+");
+            return Regex.IsMatch(lower, @"\\(?:pos|move|clip|iclip|t|fad|fade|org)\s*\(")
+                   || Regex.IsMatch(lower, @"\\p[1-9]\d*")
+                   || Regex.IsMatch(lower, @"\\k[fo]?\d+")
+                   || Regex.IsMatch(lower, @"\\an[1-9](?!\d)|\\a\d+")
+                   || Regex.IsMatch(lower, @"\\(?:fr[xyz]?|fa[xy])(?![a-z])\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)");
         }
 
         private static int CountCjk(string text)
