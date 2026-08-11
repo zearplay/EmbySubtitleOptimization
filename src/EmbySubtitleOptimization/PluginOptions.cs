@@ -46,6 +46,7 @@ namespace EmbySubtitleOptimization
             BilingualLineSpacing = 0;
             PositionMode = SubtitlePositionMode.PreserveOriginal;
             BottomDistance1080P = 20;
+            EnableWebFullscreenCanvasFix = true;
             OutputSuffix = "optimized";
         }
 
@@ -94,6 +95,10 @@ namespace EmbySubtitleOptimization
         [DisplayName("距最底部距离")]
         [Description("仅在“最底部居中”时生效。以 1920×1080 的画面高度为基准，所有分辨率均按“设置值 × 实际高度 ÷ 1080”换算。默认值为 20。")]
         public int BottomDistance1080P { get; set; }
+
+        [DisplayName("修复网页端全屏字幕位置")]
+        [Description("默认启用。修复 Emby Web 进入全屏后 ASS 字幕画布仍使用窗口模式尺寸，导致字幕整体向上、向左移动的问题。关闭后会移除插件添加的 CSS，不影响其他自定义 CSS。")]
+        public bool EnableWebFullscreenCanvasFix { get; set; }
 
         [DisplayName("输出文件后缀")]
         [Description("生成文件名中的标记。只能包含英文字母、数字、连字符或下划线。")]

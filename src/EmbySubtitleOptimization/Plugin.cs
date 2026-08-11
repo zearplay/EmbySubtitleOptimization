@@ -1,6 +1,7 @@
 using System;
 using MediaBrowser.Common;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Model.Logging;
 using EmbySubtitleOptimization.Fonts;
 
@@ -10,11 +11,19 @@ namespace EmbySubtitleOptimization
     public sealed class Plugin : BasePluginSimpleUI<PluginOptions>
     {
         private static readonly Guid PluginId = new Guid("8566851e-d044-4c96-bf14-bfae70bb5ea8");
-        public Plugin(IApplicationHost applicationHost, ILogManager logManager)
+        private readonly WebSubtitleCssManager webSubtitleCssManager;
+
+        public Plugin(
+            IApplicationHost applicationHost,
+            ILogManager logManager,
+            IServerConfigurationManager configurationManager)
             : base(applicationHost)
         {
             Instance = this;
             Logger = logManager.GetLogger(Name);
+            webSubtitleCssManager = new WebSubtitleCssManager(configurationManager, Logger);
+            var options = PrepareFontSettings(GetOptions());
+            webSubtitleCssManager.Apply(options.EnableWebFullscreenCanvasFix);
             Logger.Info("{0} loaded", Name);
         }
 
@@ -32,12 +41,15 @@ namespace EmbySubtitleOptimization
 
         protected override PluginOptions OnBeforeShowUI(PluginOptions options)
         {
-            return PrepareFontSettings(options);
+            options = PrepareFontSettings(options);
+            webSubtitleCssManager.Apply(options.EnableWebFullscreenCanvasFix);
+            return options;
         }
 
         protected override void OnOptionsSaved(PluginOptions options)
         {
             PrepareFontSettings(options);
+            webSubtitleCssManager.Apply(options.EnableWebFullscreenCanvasFix);
             Logger.Info("{0} settings updated", Name);
         }
 
@@ -136,8 +148,13 @@ namespace EmbySubtitleOptimization
                 options.BottomDistance1080P = 20;
             }
 
+            if (options.SettingsSchemaVersion < 8)
+            {
+                options.EnableWebFullscreenCanvasFix = true;
+            }
+
             options.FontName = null;
-            options.SettingsSchemaVersion = 7;
+            options.SettingsSchemaVersion = 8;
         }
     }
 }
