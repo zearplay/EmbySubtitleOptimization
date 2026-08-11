@@ -7,7 +7,7 @@ namespace EmbySubtitleOptimization.Subtitles
 {
     internal sealed class SubtitleFileProcessor
     {
-        private const int ProcessingRevision = 10;
+        private const int ProcessingRevision = 11;
 
         public ProcessResult Process(string sourcePath, string targetPath, int videoWidth, int videoHeight, PluginOptions options)
         {
@@ -40,7 +40,7 @@ namespace EmbySubtitleOptimization.Subtitles
         {
             var settings = string.Join("|", new object[]
             {
-                ProcessingRevision, profile.Name, profile.MaxLineWidth, options.CommonFontSize,
+                ProcessingRevision, profile.Name, profile.Width, profile.Height, profile.MaxLineWidth, options.CommonFontSize,
                 options.PrimaryFontName, options.SecondaryFontName, options.SrtDefaultFontName,
                 options.PrimaryFontSizePercent, options.SecondaryFontSizePercent,
                 options.PrimarySubtitleColor, options.SecondarySubtitleColor,

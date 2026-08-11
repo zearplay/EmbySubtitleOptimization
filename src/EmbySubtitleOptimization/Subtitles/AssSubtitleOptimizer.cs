@@ -76,7 +76,7 @@ namespace EmbySubtitleOptimization.Subtitles
                 var formattedText = SubtitleStyleFormatter.FormatAndOptimize(fieldsInEvent[textIndex], profile, options, null, fontSize);
                 if (options.PositionMode == SubtitlePositionMode.BottomCenter)
                 {
-                    formattedText = ForceBottomCenter(formattedText, scriptWidth, scriptHeight, options.BottomDistance1080P);
+                    formattedText = ForceBottomCenter(formattedText, scriptWidth, scriptHeight, profile, options.BottomDistance1080P);
                 }
 
                 fieldsInEvent[textIndex] = formattedText;
@@ -112,14 +112,22 @@ namespace EmbySubtitleOptimization.Subtitles
             return Math.Max(1, fallback);
         }
 
-        private static string ForceBottomCenter(string text, int scriptWidth, int scriptHeight, int bottomDistance1080P)
+        private static string ForceBottomCenter(
+            string text,
+            int scriptWidth,
+            int scriptHeight,
+            ResolutionProfile profile,
+            int bottomDistance1080P)
         {
             var withoutOriginalPosition = OverrideBlockRegex.Replace(text ?? string.Empty, match =>
             {
                 var tags = InlinePositionRegex.Replace(match.Groups["tags"].Value, string.Empty);
                 return tags.Length == 0 ? string.Empty : "{" + tags + "}";
             });
-            var scaledDistance = (int)Math.Round(bottomDistance1080P * scriptHeight / 1080.0);
+            var videoDistance = profile.ScaleVerticalFrom1080(bottomDistance1080P);
+            var scaledDistance = (int)Math.Round(
+                videoDistance * scriptHeight / (double)profile.Height,
+                MidpointRounding.AwayFromZero);
             var x = scriptWidth / 2;
             var y = Math.Max(0, scriptHeight - scaledDistance);
             return "{\\an2\\pos(" + x.ToString(CultureInfo.InvariantCulture) + "," + y.ToString(CultureInfo.InvariantCulture) + ")}" + withoutOriginalPosition;

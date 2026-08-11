@@ -21,6 +21,11 @@ namespace EmbySubtitleOptimization.Subtitles
         public int FontSize { get; }
         public int MarginV { get; }
 
+        public int ScaleVerticalFrom1080(int value)
+        {
+            return Math.Max(0, (int)Math.Round(value * Height / 1080.0, MidpointRounding.AwayFromZero));
+        }
+
         public static ResolutionProfile FromVideo(int width, int height, PluginOptions options)
         {
             var resolvedWidth = width > 0 ? width : 1920;

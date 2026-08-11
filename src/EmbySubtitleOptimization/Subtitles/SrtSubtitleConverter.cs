@@ -54,7 +54,7 @@ namespace EmbySubtitleOptimization.Subtitles
             var font = string.IsNullOrWhiteSpace(options.SrtDefaultFontName) ? "Arial" : options.SrtDefaultFontName.Replace(",", string.Empty);
             var fontSize = options.CommonFontSize > 0 ? options.CommonFontSize : profile.FontSize;
             var marginV = options.PositionMode == SubtitlePositionMode.BottomCenter
-                ? Math.Max(0, (int)Math.Round(options.BottomDistance1080P * profile.Height / 1080.0))
+                ? profile.ScaleVerticalFrom1080(options.BottomDistance1080P)
                 : profile.MarginV;
             builder.AppendLine("[Script Info]")
                 .Append("; ").AppendLine(generationMarker)

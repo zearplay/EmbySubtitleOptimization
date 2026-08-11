@@ -219,6 +219,58 @@ namespace EmbySubtitleOptimization.Tests
             var bottom = AssSubtitleOptimizer.Optimize(ass, profile, bottomOptions, "bottom-center");
             True(bottom.Contains("{\\an2\\pos(192,272)}"), "bottom-center mode scales the configured distance to the ASS canvas");
             True(!bottom.Contains("\\an7") && !bottom.Contains("\\pos(100,80)"), "bottom-center mode replaces original inline positioning");
+
+            const string srt = "1\n00:00:01,000 --> 00:00:02,000\n测试字幕";
+            var assWithoutScriptResolution = ass
+                .Replace("PlayResX: 384\n", string.Empty)
+                .Replace("PlayResY: 288\n", string.Empty);
+            var resolutionCases = new[]
+            {
+                (Name: "VGA", Width: 640, Height: 480, ExpectedDistance: 27),
+                (Name: "SD", Width: 720, Height: 480, ExpectedDistance: 27),
+                (Name: "SVGA", Width: 800, Height: 600, ExpectedDistance: 33),
+                (Name: "XGA", Width: 1024, Height: 768, ExpectedDistance: 43),
+                (Name: "SXGA", Width: 1280, Height: 1024, ExpectedDistance: 57),
+                (Name: "HD", Width: 1280, Height: 720, ExpectedDistance: 40),
+                (Name: "WXGA 16:10", Width: 1280, Height: 800, ExpectedDistance: 44),
+                (Name: "WXGA 16:9", Width: 1366, Height: 768, ExpectedDistance: 43),
+                (Name: "SXGA+", Width: 1400, Height: 1050, ExpectedDistance: 58),
+                (Name: "UXGA", Width: 1600, Height: 1200, ExpectedDistance: 67),
+                (Name: "FHD", Width: 1920, Height: 1080, ExpectedDistance: 60),
+                (Name: "WUXGA", Width: 1920, Height: 1200, ExpectedDistance: 67),
+                (Name: "UW-FHD", Width: 2560, Height: 1080, ExpectedDistance: 60),
+                (Name: "QHD", Width: 2560, Height: 1440, ExpectedDistance: 80),
+                (Name: "UW-QHD", Width: 3440, Height: 1440, ExpectedDistance: 80),
+                (Name: "DFHD", Width: 3840, Height: 1080, ExpectedDistance: 60),
+                (Name: "UHD 4K", Width: 3840, Height: 2160, ExpectedDistance: 120),
+                (Name: "DCI 4K", Width: 4096, Height: 2160, ExpectedDistance: 120),
+                (Name: "DQHD", Width: 5120, Height: 1440, ExpectedDistance: 80),
+                (Name: "8K UHD", Width: 7680, Height: 4320, ExpectedDistance: 240)
+            };
+            foreach (var resolution in resolutionCases)
+            {
+                var resolutionProfile = ResolutionProfile.FromVideo(resolution.Width, resolution.Height, bottomOptions);
+                Equal(
+                    resolution.ExpectedDistance,
+                    resolutionProfile.ScaleVerticalFrom1080(bottomOptions.BottomDistance1080P),
+                    resolution.Name + " bottom distance scales from the actual screen height");
+                var converted = SrtSubtitleConverter.Convert(srt, resolutionProfile, bottomOptions, "position-test");
+                var styleLine = converted.Split('\n').Single(line => line.StartsWith("Style: ESO,", StringComparison.Ordinal));
+                var styleValues = styleLine.Substring(7).Split(',');
+                Equal(
+                    resolution.ExpectedDistance.ToString(),
+                    styleValues[13],
+                    resolution.Name + " SRT MarginV uses the scaled bottom distance");
+                var optimizedAss = AssSubtitleOptimizer.Optimize(
+                    assWithoutScriptResolution,
+                    resolutionProfile,
+                    bottomOptions,
+                    "position-test");
+                True(
+                    optimizedAss.Contains(
+                        "{\\an2\\pos(" + (resolution.Width / 2) + "," + (resolution.Height - resolution.ExpectedDistance) + ")}"),
+                    resolution.Name + " ASS position uses the scaled bottom distance");
+            }
         }
 
         private static void TestFileProcessingIsIncremental()
@@ -234,12 +286,15 @@ namespace EmbySubtitleOptimization.Tests
                 var processor = new SubtitleFileProcessor();
                 var options = new PluginOptions();
                 True(processor.Process(source, target, 3840, 2160, options).Changed, "first file processing writes output");
-                True(File.ReadAllText(target).Contains("revision=10"), "file marker records processing revision");
+                True(File.ReadAllText(target).Contains("revision=11"), "file marker records processing revision");
                 True(File.ReadAllText(target).Contains("profile=4K"), "file marker records resolution profile");
                 True(!processor.Process(source, target, 3840, 2160, options).Changed, "unchanged file is skipped");
 
+                True(processor.Process(source, target, 3840, 1080, options).Changed, "video height change regenerates the output even when width and profile name are unchanged");
+                True(!processor.Process(source, target, 3840, 1080, options).Changed, "unchanged dimensions are skipped after height-based regeneration");
+
                 options.MaxLineWidth1080P++;
-                True(processor.Process(source, target, 3840, 2160, options).Changed, "settings change regenerates output");
+                True(processor.Process(source, target, 3840, 1080, options).Changed, "settings change regenerates output");
             }
             finally
             {
