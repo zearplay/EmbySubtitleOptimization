@@ -16,7 +16,7 @@ namespace EmbySubtitleOptimization
             EnableAss = true;
             EnableSrt = true;
             BalanceBilingualLines = true;
-            MaxLineWidth1080P = 40;
+            MaxLineWidth1080P = 80;
             MaxLineWidth2K = 46;
             MaxLineWidth4K = 52;
             CommonFontSize = 17;
@@ -32,6 +32,12 @@ namespace EmbySubtitleOptimization
             SingleSubtitleColor = "#FFFFFF";
             PrimarySubtitleColor = "#FFFFFF";
             SecondarySubtitleColor = "#FFD966";
+            PrimaryBorderEnabled = true;
+            SecondaryBorderEnabled = true;
+            PrimaryBorderWidth = 1;
+            SecondaryBorderWidth = 1;
+            PrimaryBorderColor = "#000000";
+            SecondaryBorderColor = "#000000";
             SingleFontStyle = SubtitleFontStyle.Regular;
             PrimaryFontStyle = SubtitleFontStyle.Bold;
             SecondaryFontStyle = SubtitleFontStyle.Regular;
@@ -59,7 +65,7 @@ namespace EmbySubtitleOptimization
         public bool EnableSrt { get; set; }
 
         [DisplayName("1920×1080 基准每行最大字符宽度")]
-        [Description("只需设置 1920×1080 横屏的基准值。修改此值后，所有横屏分辨率都会按照实际横向分辨率相对于 1920 像素的比例重新计算；竖屏直接使用基准值。")]
+        [Description("默认值为 80。修改此值后，所有横屏分辨率都会按照实际横向分辨率相对于 1920 像素的比例重新计算；竖屏直接使用基准值。")]
         public int MaxLineWidth1080P { get; set; }
 
         [Browsable(false)]
@@ -115,6 +121,18 @@ namespace EmbySubtitleOptimization
         [Description("用于单字幕和双字幕第一行。")]
         public SubtitleFontStyle PrimaryFontStyle { get; set; }
 
+        [DisplayName("字体边框（含单字幕）")]
+        [Description("控制单字幕和双字幕第一行是否使用外边框。边框类型固定为外边框。")]
+        public bool PrimaryBorderEnabled { get; set; }
+
+        [DisplayName("边框宽度（含单字幕）")]
+        [Description("单字幕和双字幕第一行的外边框宽度。默认值为 1。")]
+        public double PrimaryBorderWidth { get; set; }
+
+        [DisplayName("边框颜色（含单字幕）")]
+        [Description("单字幕和双字幕第一行的外边框颜色。使用 #RRGGBB 或 #AARRGGBB 格式，默认值为黑色。")]
+        public string PrimaryBorderColor { get; set; }
+
         [DisplayName("Spacing（含单字幕）")]
         [Description("ASS 字符间距。默认值为 0；负数收紧字符，正数放宽字符。")]
         public double PrimaryCharacterSpacing { get; set; }
@@ -139,6 +157,18 @@ namespace EmbySubtitleOptimization
         [DisplayName("字体风格")]
         [Description("用于双字幕的第二行。")]
         public SubtitleFontStyle SecondaryFontStyle { get; set; }
+
+        [DisplayName("字体边框")]
+        [Description("控制双字幕第二行是否使用外边框。边框类型固定为外边框。")]
+        public bool SecondaryBorderEnabled { get; set; }
+
+        [DisplayName("边框宽度")]
+        [Description("双字幕第二行的外边框宽度。默认值为 1。")]
+        public double SecondaryBorderWidth { get; set; }
+
+        [DisplayName("边框颜色")]
+        [Description("双字幕第二行的外边框颜色。使用 #RRGGBB 或 #AARRGGBB 格式，默认值为黑色。")]
+        public string SecondaryBorderColor { get; set; }
 
         [DisplayName("Spacing")]
         [Description("双字幕第二行的 ASS 字符间距。默认值为 0。")]
@@ -211,6 +241,18 @@ namespace EmbySubtitleOptimization
 
             ValidateColor(context, nameof(PrimarySubtitleColor), PrimarySubtitleColor);
             ValidateColor(context, nameof(SecondarySubtitleColor), SecondarySubtitleColor);
+            ValidateColor(context, nameof(PrimaryBorderColor), PrimaryBorderColor);
+            ValidateColor(context, nameof(SecondaryBorderColor), SecondaryBorderColor);
+
+            if (PrimaryBorderWidth < 0 || PrimaryBorderWidth > 20)
+            {
+                context.AddValidationError(nameof(PrimaryBorderWidth), "主字幕边框宽度必须在 0 到 20 之间。 ");
+            }
+
+            if (SecondaryBorderWidth < 0 || SecondaryBorderWidth > 20)
+            {
+                context.AddValidationError(nameof(SecondaryBorderWidth), "副字幕边框宽度必须在 0 到 20 之间。 ");
+            }
 
             if (BilingualLineSpacing < 0 || BilingualLineSpacing > 80)
             {

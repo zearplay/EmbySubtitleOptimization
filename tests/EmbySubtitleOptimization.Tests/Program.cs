@@ -39,26 +39,26 @@ namespace EmbySubtitleOptimization.Tests
             Equal("4K", profile2160P.Name, "4K profile");
             var landscapeCases = new[]
             {
-                (Name: "VGA", Width: 640, Height: 480, Expected: 13),
-                (Name: "SD", Width: 720, Height: 480, Expected: 15),
-                (Name: "SVGA", Width: 800, Height: 600, Expected: 17),
-                (Name: "XGA", Width: 1024, Height: 768, Expected: 21),
-                (Name: "SXGA", Width: 1280, Height: 1024, Expected: 27),
-                (Name: "HD", Width: 1280, Height: 720, Expected: 27),
-                (Name: "WXGA 16:10", Width: 1280, Height: 800, Expected: 27),
-                (Name: "WXGA 16:9", Width: 1366, Height: 768, Expected: 28),
-                (Name: "SXGA+", Width: 1400, Height: 1050, Expected: 29),
-                (Name: "UXGA", Width: 1600, Height: 1200, Expected: 33),
-                (Name: "FHD", Width: 1920, Height: 1080, Expected: 40),
-                (Name: "WUXGA", Width: 1920, Height: 1200, Expected: 40),
-                (Name: "UW-FHD", Width: 2560, Height: 1080, Expected: 53),
-                (Name: "QHD", Width: 2560, Height: 1440, Expected: 53),
-                (Name: "UW-QHD", Width: 3440, Height: 1440, Expected: 72),
-                (Name: "DFHD", Width: 3840, Height: 1080, Expected: 80),
-                (Name: "UHD 4K", Width: 3840, Height: 2160, Expected: 80),
-                (Name: "DCI 4K", Width: 4096, Height: 2160, Expected: 85),
-                (Name: "DQHD", Width: 5120, Height: 1440, Expected: 107),
-                (Name: "8K UHD", Width: 7680, Height: 4320, Expected: 160)
+                (Name: "VGA", Width: 640, Height: 480, Expected: 27),
+                (Name: "SD", Width: 720, Height: 480, Expected: 30),
+                (Name: "SVGA", Width: 800, Height: 600, Expected: 33),
+                (Name: "XGA", Width: 1024, Height: 768, Expected: 43),
+                (Name: "SXGA", Width: 1280, Height: 1024, Expected: 53),
+                (Name: "HD", Width: 1280, Height: 720, Expected: 53),
+                (Name: "WXGA 16:10", Width: 1280, Height: 800, Expected: 53),
+                (Name: "WXGA 16:9", Width: 1366, Height: 768, Expected: 57),
+                (Name: "SXGA+", Width: 1400, Height: 1050, Expected: 58),
+                (Name: "UXGA", Width: 1600, Height: 1200, Expected: 67),
+                (Name: "FHD", Width: 1920, Height: 1080, Expected: 80),
+                (Name: "WUXGA", Width: 1920, Height: 1200, Expected: 80),
+                (Name: "UW-FHD", Width: 2560, Height: 1080, Expected: 107),
+                (Name: "QHD", Width: 2560, Height: 1440, Expected: 107),
+                (Name: "UW-QHD", Width: 3440, Height: 1440, Expected: 143),
+                (Name: "DFHD", Width: 3840, Height: 1080, Expected: 160),
+                (Name: "UHD 4K", Width: 3840, Height: 2160, Expected: 160),
+                (Name: "DCI 4K", Width: 4096, Height: 2160, Expected: 171),
+                (Name: "DQHD", Width: 5120, Height: 1440, Expected: 213),
+                (Name: "8K UHD", Width: 7680, Height: 4320, Expected: 320)
             };
             foreach (var resolution in landscapeCases)
             {
@@ -82,9 +82,9 @@ namespace EmbySubtitleOptimization.Tests
             Equal(240, ResolutionProfile.FromVideo(7680, 4320, customBaseOptions).MaxLineWidth, "custom base rescales 7680-wide screens");
             Equal(60, ResolutionProfile.FromVideo(1080, 1920, customBaseOptions).MaxLineWidth, "portrait screen uses the changed base without scaling");
 
-            Equal(40, ResolutionProfile.FromVideo(1080, 1920, options).MaxLineWidth, "portrait screen keeps the configured base without proportional adaptation");
-            Equal(40, ResolutionProfile.FromVideo(720, 1280, options).MaxLineWidth, "smaller portrait screen also keeps the configured base");
-            Equal(40, ResolutionProfile.FromVideo(0, 2160, options).MaxLineWidth, "missing screen width uses the 1920-wide base");
+            Equal(80, ResolutionProfile.FromVideo(1080, 1920, options).MaxLineWidth, "portrait screen keeps the configured base without proportional adaptation");
+            Equal(80, ResolutionProfile.FromVideo(720, 1280, options).MaxLineWidth, "smaller portrait screen also keeps the configured base");
+            Equal(80, ResolutionProfile.FromVideo(0, 2160, options).MaxLineWidth, "missing screen width uses the 1920-wide base");
             Equal(17d, options.CommonFontSize, "common Fontsize defaults to 17");
             Equal("Source Han Sans SC", options.PrimaryFontName, "primary font defaults to Source Han Sans SC");
             Equal(70, options.SecondaryFontSizePercent, "secondary Fontsize ratio defaults to 70 percent");
@@ -110,7 +110,7 @@ namespace EmbySubtitleOptimization.Tests
         private static void TestSpecialEffectsArePreserved()
         {
             const string input = "{\\pos(100,200)\\fs28\\bord2\\blur3\\3c&HFFFFFF&\\xshad1}这是一条不能被改写的超长定位字幕";
-            const string expected = "{\\fs17}{\\pos(100,200)}这是一条不能被改写的超长定位字幕";
+            const string expected = "{\\3c&H000000&\\3a&H00&\\bord1}{\\fs17}{\\pos(100,200)}这是一条不能被改写的超长定位字幕";
             var options = new PluginOptions();
             var profile = ResolutionProfile.FromVideo(1920, 1080, options);
             Equal(expected, SubtitleStyleFormatter.FormatAndOptimize(input, profile, options), "positioned ASS event keeps effects but inherits Style Fontsize");
@@ -131,9 +131,15 @@ namespace EmbySubtitleOptimization.Tests
                 PrimarySubtitleColor = "#FF0000",
                 PrimaryFontName = "Source Han Sans SC",
                 PrimaryFontStyle = SubtitleFontStyle.BoldItalic,
+                PrimaryBorderEnabled = true,
+                PrimaryBorderWidth = 1.5,
+                PrimaryBorderColor = "#112233",
                 SecondarySubtitleColor = "#8000FF00",
                 SecondaryFontName = "Roboto",
                 SecondaryFontStyle = SubtitleFontStyle.Italic,
+                SecondaryBorderEnabled = true,
+                SecondaryBorderWidth = 2.25,
+                SecondaryBorderColor = "#80445566",
                 PrimaryCharacterSpacing = 1.5,
                 SecondaryCharacterSpacing = -0.5,
                 CommonFontSize = 50,
@@ -142,11 +148,13 @@ namespace EmbySubtitleOptimization.Tests
             var profile = ResolutionProfile.FromVideo(1920, 1080, options);
 
             var single = SubtitleStyleFormatter.FormatAndOptimize("单行字幕", profile, options);
-            True(single.StartsWith("{\\fnSource Han Sans SC\\fs50\\fsp1.5\\c&H0000FF&\\alpha&H00&\\b1\\i1}", StringComparison.Ordinal), "single subtitle uses common Fontsize and primary settings");
+            True(single.StartsWith("{\\fnSource Han Sans SC\\fs50\\fsp1.5\\c&H0000FF&\\alpha&H00&\\b1\\i1\\3c&H332211&\\3a&H00&\\bord1.5}", StringComparison.Ordinal), "single subtitle uses common Fontsize and primary settings");
 
             var bilingual = SubtitleStyleFormatter.FormatAndOptimize("主中文字幕\\N{\\rEng}A much longer secondary English subtitle", profile, options);
             True(bilingual.Contains("\\fnSource Han Sans SC\\fs50\\fsp1.5\\c&H0000FF&\\alpha&H00&\\b1\\i1"), "primary subtitle uses 100 percent of common Fontsize");
             True(bilingual.Contains("\\fnRoboto\\fs35\\fsp-0.5\\c&H00FF00&\\alpha&H7F&\\b0\\i1"), "secondary subtitle uses 70 percent of common Fontsize");
+            True(bilingual.Contains("\\3c&H332211&\\3a&H00&\\bord1.5"), "primary subtitle uses its configured outer border");
+            True(bilingual.Contains("\\3c&H665544&\\3a&H7F&\\bord2.25"), "secondary subtitle uses its configured outer border");
             True(bilingual.Contains("\\rEng\\fnRoboto\\fs35"), "configured secondary Fontsize is reapplied after the original Style reset");
             True(!bilingual.Contains("\\fscx"), "styled bilingual subtitle has no horizontal scale override");
             True(bilingual.Contains("{\\fs10}\\h{\\r}\\N"), "bilingual line gap uses Fontsize without ScaleY");
@@ -170,8 +178,8 @@ namespace EmbySubtitleOptimization.Tests
             var output = SrtSubtitleConverter.Convert(srt, ResolutionProfile.FromVideo(1920, 1080, options), options, "test-marker");
             True(output.Contains("PlayResX: 1920"), "SRT output uses video resolution");
             True(output.Contains("Style: ESO,Verdana,52"), "SRT ASS style uses selected font and common Fontsize");
-            True(output.Contains("Format: Name, Fontname, Fontsize, PrimaryColour, Bold, Italic, Underline, StrikeOut, Spacing, Angle, Alignment, MarginL, MarginR, MarginV, Encoding"), "SRT ASS style uses the reduced field list");
-            True(output.Contains("Style: ESO,Verdana,52,&H00FFFFFF,0,0,0,0,1.25,0,2,"), "SRT ASS style writes only allowed fields");
+            True(output.Contains("Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, Bold, Italic, Underline, StrikeOut, Spacing, Angle, BorderStyle, Outline, Alignment, MarginL, MarginR, MarginV, Encoding"), "SRT ASS style includes the default border fields");
+            True(output.Contains("Style: ESO,Verdana,52,&H00FFFFFF,&H00000000,0,0,0,0,1.25,0,1,1,2,"), "SRT ASS style uses a black border with width one");
             True(output.Contains(",96,96,90,1"), "SRT bottom-center mode uses the configured bottom distance");
             True(!output.Contains("ScaledBorderAndShadow"), "SRT ASS omits ScaledBorderAndShadow");
             True(output.Contains("{\\fnVerdana\\fs52\\fsp1.25"), "single SRT cue uses common Fontsize");
@@ -184,21 +192,41 @@ namespace EmbySubtitleOptimization.Tests
 
         private static void TestAssEventWithCommas()
         {
-            const string ass = "[Script Info]\nScriptType: v4.00+\nPlayResY: 288\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,33,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,{\\bord2\\blur1}这是带有逗号,而且非常长的字幕\\N{\\fs22\\4c&HFFFFFF&\\yshad2}English subtitle";
+            const string ass = "[Script Info]\nScriptType: v4.00+\nPlayResY: 288\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,33,&H00FFFFFF,&H000000FF,&H00FFFFFF,&H00000000,0,0,0,0,100,100,0,0,3,2,0,2,10,10,10,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,{\\bord2\\blur1}这是带有逗号,而且非常长的字幕\\N{\\fs22\\4c&HFFFFFF&\\yshad2}English subtitle";
             var options = new PluginOptions { MaxLineWidth1080P = 20, CommonFontSize = 0, BilingualLineSpacing = 0 };
             var output = AssSubtitleOptimizer.Optimize(ass, ResolutionProfile.FromVideo(1920, 1080, options), options, "test-marker");
             True(output.Contains("逗号,"), "comma in ASS text is preserved");
             True(output.Contains("Style: Default,Arial,33,"), "ASS Style Fontsize is preserved");
-            True(!output.Contains("SecondaryColour") && !output.Contains("OutlineColour") && !output.Contains("BackColour"), "ASS color effect fields are removed");
+            True(!output.Contains("SecondaryColour") && !output.Contains("BackColour"), "unused ASS color effect fields are removed");
             True(!output.Contains("ScaleX") && !output.Contains("ScaleY"), "ASS scale fields are removed");
-            True(!output.Contains("BorderStyle") && !output.Contains("Outline") && !output.Contains("Shadow"), "ASS border and shadow fields are removed");
+            True(!output.Contains("Shadow"), "ASS shadow field is removed");
+            var styleFormat = output.Split('\n').First(line => line.StartsWith("Format: Name, Fontname", StringComparison.Ordinal));
+            var styleFields = styleFormat.Substring(7).Split(',').Select(value => value.Trim()).ToArray();
+            var styleLine = output.Split('\n').Single(line => line.StartsWith("Style: Default,", StringComparison.Ordinal));
+            var styleValues = styleLine.Substring(7).Split(',');
+            Equal("&H00000000", styleValues[Array.IndexOf(styleFields, "OutlineColour")], "ASS border color is forced to black");
+            Equal("1", styleValues[Array.IndexOf(styleFields, "BorderStyle")], "ASS border style is forced to normal outline");
+            Equal("1", styleValues[Array.IndexOf(styleFields, "Outline")], "ASS border width is forced to one");
             True(!output.Contains("{\\fs22}English subtitle"), "original inline ASS Fontsize is replaced");
             True(output.Contains("\\fs33"), "primary subtitle uses 100 percent of Style Fontsize");
             True(output.Contains("\\fs23.1"), "secondary subtitle uses 70 percent of Style Fontsize");
             Equal(2, Regex.Matches(output, @"\\fs(?![pc])(?:\d|\.)").Count, "bilingual lines have independent fs tags");
-            True(!Regex.IsMatch(output, @"\\(?:2c|3c|4c|blur|be|shad|xbord|bord|xshad|yshad|fscx|fscy)(?![a-z])", RegexOptions.IgnoreCase), "forbidden inline tags are absent from optimized ASS");
+            True(!Regex.IsMatch(output, @"\\(?:2c|4c|blur|be|shad|xbord|xshad|yshad|fscx|fscy)(?![a-z])", RegexOptions.IgnoreCase), "forbidden inline tags are absent from optimized ASS");
+            True(!output.Contains("\\bord2") && !output.Contains("\\3c&HFFFFFF&"), "source border overrides are replaced by configured border settings");
             True(output.Contains("\\N"), "ASS dialogue wraps");
             True(output.Contains("test-marker"), "generation marker is added");
+
+            var ssaOutput = AssSubtitleOptimizer.Optimize(
+                ass.Replace("[V4+ Styles]", "[V4 Styles]").Replace("OutlineColour", "TertiaryColour"),
+                ResolutionProfile.FromVideo(1920, 1080, options),
+                options,
+                "ssa-border-test");
+            var ssaFormat = ssaOutput.Split('\n').First(line => line.StartsWith("Format: Name, Fontname", StringComparison.Ordinal));
+            var ssaFields = ssaFormat.Substring(7).Split(',').Select(value => value.Trim()).ToArray();
+            var ssaStyle = ssaOutput.Split('\n').Single(line => line.StartsWith("Style: Default,", StringComparison.Ordinal));
+            var ssaValues = ssaStyle.Substring(7).Split(',');
+            Equal("&H00000000", ssaValues[Array.IndexOf(ssaFields, "TertiaryColour")], "SSA border color is forced to black");
+            Equal("1", ssaValues[Array.IndexOf(ssaFields, "Outline")], "SSA border width is forced to one");
         }
 
         private static void TestSubtitlePositionModes()
@@ -255,11 +283,13 @@ namespace EmbySubtitleOptimization.Tests
                     resolutionProfile.ScaleVerticalFrom1080(bottomOptions.BottomDistance1080P),
                     resolution.Name + " bottom distance scales from the actual screen height");
                 var converted = SrtSubtitleConverter.Convert(srt, resolutionProfile, bottomOptions, "position-test");
+                var srtStyleFormat = converted.Split('\n').Single(line => line.StartsWith("Format: Name, Fontname", StringComparison.Ordinal));
+                var srtStyleFields = srtStyleFormat.Substring(7).Split(',').Select(value => value.Trim()).ToArray();
                 var styleLine = converted.Split('\n').Single(line => line.StartsWith("Style: ESO,", StringComparison.Ordinal));
                 var styleValues = styleLine.Substring(7).Split(',');
                 Equal(
                     resolution.ExpectedDistance.ToString(),
-                    styleValues[13],
+                    styleValues[Array.IndexOf(srtStyleFields, "MarginV")],
                     resolution.Name + " SRT MarginV uses the scaled bottom distance");
                 var optimizedAss = AssSubtitleOptimizer.Optimize(
                     assWithoutScriptResolution,
@@ -286,7 +316,7 @@ namespace EmbySubtitleOptimization.Tests
                 var processor = new SubtitleFileProcessor();
                 var options = new PluginOptions();
                 True(processor.Process(source, target, 3840, 2160, options).Changed, "first file processing writes output");
-                True(File.ReadAllText(target).Contains("revision=11"), "file marker records processing revision");
+                True(File.ReadAllText(target).Contains("revision=14"), "file marker records processing revision");
                 True(File.ReadAllText(target).Contains("profile=4K"), "file marker records resolution profile");
                 True(!processor.Process(source, target, 3840, 2160, options).Changed, "unchanged file is skipped");
 

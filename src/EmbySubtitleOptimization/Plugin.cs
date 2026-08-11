@@ -103,8 +103,23 @@ namespace EmbySubtitleOptimization
                 }
             }
 
+            if (options.SettingsSchemaVersion < 4)
+            {
+                options.PrimaryBorderEnabled = true;
+                options.SecondaryBorderEnabled = true;
+                options.PrimaryBorderWidth = 1;
+                options.SecondaryBorderWidth = 1;
+                options.PrimaryBorderColor = "#000000";
+                options.SecondaryBorderColor = "#000000";
+            }
+
+            if (options.SettingsSchemaVersion < 5 && options.MaxLineWidth1080P == 40)
+            {
+                options.MaxLineWidth1080P = 80;
+            }
+
             options.FontName = null;
-            options.SettingsSchemaVersion = 3;
+            options.SettingsSchemaVersion = 5;
         }
     }
 }

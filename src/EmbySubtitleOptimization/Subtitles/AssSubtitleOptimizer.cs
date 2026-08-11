@@ -20,7 +20,7 @@ namespace EmbySubtitleOptimization.Subtitles
             var scriptWidth = ReadScriptResolution(lines, "PlayResX", profile.Width);
             var scriptHeight = ReadScriptResolution(lines, "PlayResY", profile.Height);
             var styleFontSizes = ReadStyleFontSizes(lines);
-            RemoveForbiddenStyleFields(lines);
+            NormalizeStyleFields(lines);
             var eventSection = false;
             var textIndex = 9;
             var styleIndex = 3;
@@ -174,11 +174,13 @@ namespace EmbySubtitleOptimization.Subtitles
             return result;
         }
 
-        private static void RemoveForbiddenStyleFields(IList<string> lines)
+        private static void NormalizeStyleFields(IList<string> lines)
         {
             var styleSection = false;
-            int[] keptIndices = null;
+            List<string> outputFields = null;
+            List<int> sourceIndices = null;
             var styleFieldCount = 0;
+            var borderColorField = "OutlineColour";
 
             for (var index = 0; index < lines.Count; index++)
             {
@@ -191,9 +193,11 @@ namespace EmbySubtitleOptimization.Subtitles
 
                 if (trimmed.StartsWith("[", StringComparison.Ordinal))
                 {
-                    styleSection = trimmed.Equals("[V4+ Styles]", StringComparison.OrdinalIgnoreCase)
-                                   || trimmed.Equals("[V4 Styles]", StringComparison.OrdinalIgnoreCase);
-                    keptIndices = null;
+                    var legacyStyleSection = trimmed.Equals("[V4 Styles]", StringComparison.OrdinalIgnoreCase);
+                    styleSection = trimmed.Equals("[V4+ Styles]", StringComparison.OrdinalIgnoreCase) || legacyStyleSection;
+                    borderColorField = legacyStyleSection ? "TertiaryColour" : "OutlineColour";
+                    outputFields = null;
+                    sourceIndices = null;
                     styleFieldCount = 0;
                     continue;
                 }
@@ -203,32 +207,71 @@ namespace EmbySubtitleOptimization.Subtitles
                 {
                     var fields = trimmed.Substring(7).Split(',').Select(field => field.Trim()).ToArray();
                     styleFieldCount = fields.Length;
-                    keptIndices = fields.Select((field, fieldIndex) => new { field, fieldIndex })
-                        .Where(value => !IsForbiddenStyleField(value.field))
-                        .Select(value => value.fieldIndex)
-                        .ToArray();
-                    lines[index] = "Format: " + string.Join(", ", keptIndices.Select(fieldIndex => fields[fieldIndex]));
+                    outputFields = new List<string>();
+                    sourceIndices = new List<int>();
+                    for (var fieldIndex = 0; fieldIndex < fields.Length; fieldIndex++)
+                    {
+                        if (IsForbiddenStyleField(fields[fieldIndex], borderColorField)) continue;
+                        var fieldName = borderColorField.Equals("OutlineColour", StringComparison.OrdinalIgnoreCase)
+                                        && fields[fieldIndex].Equals("OutlineColor", StringComparison.OrdinalIgnoreCase)
+                            ? "OutlineColour"
+                            : fields[fieldIndex];
+                        if (outputFields.Any(existing => existing.Equals(fieldName, StringComparison.OrdinalIgnoreCase))) continue;
+                        outputFields.Add(fieldName);
+                        sourceIndices.Add(fieldIndex);
+                    }
+
+                    EnsureStyleField(outputFields, sourceIndices, borderColorField);
+                    EnsureStyleField(outputFields, sourceIndices, "BorderStyle");
+                    EnsureStyleField(outputFields, sourceIndices, "Outline");
+                    lines[index] = "Format: " + string.Join(", ", outputFields);
                     continue;
                 }
 
-                if (keptIndices == null || !trimmed.StartsWith("Style:", StringComparison.OrdinalIgnoreCase)) continue;
+                if (outputFields == null || !trimmed.StartsWith("Style:", StringComparison.OrdinalIgnoreCase)) continue;
                 var values = trimmed.Substring(6).TrimStart().Split(new[] { ',' }, styleFieldCount);
-                lines[index] = "Style: " + string.Join(",", keptIndices.Where(fieldIndex => fieldIndex < values.Length).Select(fieldIndex => values[fieldIndex]));
+                var outputValues = new string[outputFields.Count];
+                for (var fieldIndex = 0; fieldIndex < outputFields.Count; fieldIndex++)
+                {
+                    if (outputFields[fieldIndex].Equals(borderColorField, StringComparison.OrdinalIgnoreCase))
+                    {
+                        outputValues[fieldIndex] = "&H00000000";
+                    }
+                    else if (outputFields[fieldIndex].Equals("BorderStyle", StringComparison.OrdinalIgnoreCase)
+                             || outputFields[fieldIndex].Equals("Outline", StringComparison.OrdinalIgnoreCase))
+                    {
+                        outputValues[fieldIndex] = "1";
+                    }
+                    else
+                    {
+                        var sourceIndex = sourceIndices[fieldIndex];
+                        outputValues[fieldIndex] = sourceIndex >= 0 && sourceIndex < values.Length ? values[sourceIndex] : string.Empty;
+                    }
+                }
+
+                lines[index] = "Style: " + string.Join(",", outputValues);
             }
         }
 
-        private static bool IsForbiddenStyleField(string fieldName)
+        private static void EnsureStyleField(ICollection<string> outputFields, ICollection<int> sourceIndices, string fieldName)
+        {
+            if (outputFields.Any(existing => existing.Equals(fieldName, StringComparison.OrdinalIgnoreCase))) return;
+            outputFields.Add(fieldName);
+            sourceIndices.Add(-1);
+        }
+
+        private static bool IsForbiddenStyleField(string fieldName, string borderColorField)
         {
             return fieldName.Equals("SecondaryColour", StringComparison.OrdinalIgnoreCase)
-                   || fieldName.Equals("OutlineColour", StringComparison.OrdinalIgnoreCase)
-                   || fieldName.Equals("OutlineColor", StringComparison.OrdinalIgnoreCase)
-                   || fieldName.Equals("TertiaryColour", StringComparison.OrdinalIgnoreCase)
                    || fieldName.Equals("BackColour", StringComparison.OrdinalIgnoreCase)
                    || fieldName.Equals("ScaleX", StringComparison.OrdinalIgnoreCase)
                    || fieldName.Equals("ScaleY", StringComparison.OrdinalIgnoreCase)
-                   || fieldName.Equals("BorderStyle", StringComparison.OrdinalIgnoreCase)
-                   || fieldName.Equals("Outline", StringComparison.OrdinalIgnoreCase)
-                   || fieldName.Equals("Shadow", StringComparison.OrdinalIgnoreCase);
+                   || fieldName.Equals("Shadow", StringComparison.OrdinalIgnoreCase)
+                   || (fieldName.Equals("TertiaryColour", StringComparison.OrdinalIgnoreCase)
+                       && !borderColorField.Equals("TertiaryColour", StringComparison.OrdinalIgnoreCase))
+                   || ((fieldName.Equals("OutlineColour", StringComparison.OrdinalIgnoreCase)
+                        || fieldName.Equals("OutlineColor", StringComparison.OrdinalIgnoreCase))
+                       && !borderColorField.Equals("OutlineColour", StringComparison.OrdinalIgnoreCase));
         }
 
     }

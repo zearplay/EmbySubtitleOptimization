@@ -2,7 +2,7 @@ namespace EmbySubtitleOptimization
 {
     internal sealed class PluginOptions
     {
-        public int MaxLineWidth1080P { get; set; } = 40;
+        public int MaxLineWidth1080P { get; set; } = 80;
         public int MaxLineWidth2K { get; set; } = 46;
         public int MaxLineWidth4K { get; set; } = 52;
         public double CommonFontSize { get; set; } = 17;
@@ -13,6 +13,12 @@ namespace EmbySubtitleOptimization
         public int SecondaryFontSizePercent { get; set; } = 70;
         public string PrimarySubtitleColor { get; set; } = "#FFFFFF";
         public string SecondarySubtitleColor { get; set; } = "#FFD966";
+        public bool PrimaryBorderEnabled { get; set; } = true;
+        public bool SecondaryBorderEnabled { get; set; } = true;
+        public double PrimaryBorderWidth { get; set; } = 1;
+        public double SecondaryBorderWidth { get; set; } = 1;
+        public string PrimaryBorderColor { get; set; } = "#000000";
+        public string SecondaryBorderColor { get; set; } = "#000000";
         public SubtitleFontStyle PrimaryFontStyle { get; set; } = SubtitleFontStyle.Bold;
         public SubtitleFontStyle SecondaryFontStyle { get; set; } = SubtitleFontStyle.Regular;
         public double PrimaryCharacterSpacing { get; set; }
