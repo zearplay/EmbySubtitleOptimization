@@ -16,6 +16,7 @@ Emby Subtitle Optimization 是一个 Emby Server 插件。插件优化外置 ASS
 - 主字幕、副字幕和 SRT 转 ASS 默认字体使用固定的通用字体下拉框，不读取服务器载体字体。
 - 主字幕和副字幕可分别设置 ASS `Spacing`。插件使用 `\fsp` 写入字符间距。
 - 双字幕以第一行为主字幕、第二行为副字幕，并支持设置两行的上下间隔。
+- 字幕位置默认为“不修改原字幕位置”，保留 ASS/SSA 的 Style 对齐与边距、Dialogue 边距、`\pos` 和 `\move`。也可选择“最底部居中”，并设置距底部距离。
 - 含定位、移动、裁剪、绘图或卡拉 OK 标签的 ASS/SSA 事件保持不变。
 - SRT 字幕转换为 ASS 副本；转换后的默认字体可以单独选择。双语两行仍分别使用主字幕和副字幕字体。
 
@@ -39,7 +40,9 @@ Emby Subtitle Optimization 是一个 Emby Server 插件。插件优化外置 ASS
 
 主字幕 Fontsize 比例默认为 100%，副字幕 Fontsize 比例默认为 70%。例如 Style `Fontsize` 为 40 时，主字幕使用 `\fs40`，副字幕使用 `\fs28`。单字幕使用主字幕比例。
 
-插件会移除 Dialogue 文本中的 `\r` 和 `\rStyle` 重置标签，防止它们在主字幕或副字幕的 `\fs`、字体、颜色和字体风格之后重新加载原始 Style。
+插件保留 Dialogue 文本中的 `\r` 和 `\rStyle`，以免改变原字幕依赖 Style 的位置；随后重新应用对应主字幕或副字幕的 `\fs`、字体、颜色和字体风格，避免 Style 重置覆盖插件设置。
+
+“距最底部距离”仅在“最底部居中”模式下生效，默认值为 60。该数值以 1080p 字幕画布像素为基准，并按 ASS/SSA 的 `PlayResY` 或 SRT 转换画布高度同比例换算。
 
 生成标记包含处理修订号。插件的字幕改写逻辑升级后，下一次计划任务会自动重新生成旧的 `.optimized.ass` 文件。
 
@@ -66,7 +69,7 @@ Emby Subtitle Optimization 是一个 Emby Server 插件。插件优化外置 ASS
 ## 使用
 
 1. 打开「控制台 > 插件 > Emby Subtitle Optimization > 设置」。
-2. 在「通用设置」中调整处理范围、最大行宽、Fontsize、SRT 转 ASS 默认字体、双字幕上下间隔和输出后缀。
+2. 在「通用设置」中调整处理范围、最大行宽、Fontsize、SRT 转 ASS 默认字体、双字幕上下间隔、字幕位置、距最底部距离和输出后缀。
 3. 在「主字幕设置」中选择字体、Fontsize 比例、字体颜色、字体风格和 `Spacing`。单字幕沿用主字幕设置。
 4. 在「副字幕设置」中选择双字幕第二行的字体、Fontsize 比例、字体颜色、字体风格和 `Spacing`。
 5. 保存设置。

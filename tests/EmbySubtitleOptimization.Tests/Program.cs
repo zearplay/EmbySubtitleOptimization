@@ -19,6 +19,7 @@ namespace EmbySubtitleOptimization.Tests
             TestSpecialEffectsArePreserved();
             TestSrtConversion();
             TestAssEventWithCommas();
+            TestSubtitlePositionModes();
             TestFileProcessingIsIncremental();
 
             Console.WriteLine(failures == 0 ? "All subtitle optimizer tests passed." : failures + " test(s) failed.");
@@ -93,7 +94,7 @@ namespace EmbySubtitleOptimization.Tests
             var bilingual = SubtitleStyleFormatter.FormatAndOptimize("主中文字幕\\N{\\rEng}A much longer secondary English subtitle", profile, options);
             True(bilingual.Contains("\\fnSource Han Sans SC\\fs50\\fsp1.5\\c&H0000FF&\\alpha&H00&\\b1\\i1"), "primary subtitle uses 100 percent of common Fontsize");
             True(bilingual.Contains("\\fnRoboto\\fs35\\fsp-0.5\\c&H00FF00&\\alpha&H7F&\\b0\\i1"), "secondary subtitle uses 70 percent of common Fontsize");
-            True(!bilingual.Contains("\\rEng"), "inline Style reset cannot override the configured secondary Fontsize");
+            True(bilingual.Contains("\\rEng\\fnRoboto\\fs35"), "configured secondary Fontsize is reapplied after the original Style reset");
             True(!bilingual.Contains("\\fscx"), "styled bilingual subtitle has no horizontal scale override");
             True(bilingual.Contains("{\\fs10}\\h{\\r}\\N"), "bilingual line gap uses Fontsize without ScaleY");
         }
@@ -109,13 +110,16 @@ namespace EmbySubtitleOptimization.Tests
                 SrtDefaultFontName = "Verdana",
                 CommonFontSize = 52,
                 PrimaryCharacterSpacing = 1.25,
-                SecondaryCharacterSpacing = -0.5
+                SecondaryCharacterSpacing = -0.5,
+                PositionMode = SubtitlePositionMode.BottomCenter,
+                BottomDistance1080P = 90
             };
             var output = SrtSubtitleConverter.Convert(srt, ResolutionProfile.FromVideo(1920, 1080, options), options, "test-marker");
             True(output.Contains("PlayResX: 1920"), "SRT output uses video resolution");
             True(output.Contains("Style: ESO,Verdana,52"), "SRT ASS style uses selected font and common Fontsize");
             True(output.Contains("Format: Name, Fontname, Fontsize, PrimaryColour, Bold, Italic, Underline, StrikeOut, Spacing, Angle, Alignment, MarginL, MarginR, MarginV, Encoding"), "SRT ASS style uses the reduced field list");
             True(output.Contains("Style: ESO,Verdana,52,&H00FFFFFF,0,0,0,0,1.25,0,2,"), "SRT ASS style writes only allowed fields");
+            True(output.Contains(",96,96,90,1"), "SRT bottom-center mode uses the configured bottom distance");
             True(!output.Contains("ScaledBorderAndShadow"), "SRT ASS omits ScaledBorderAndShadow");
             True(output.Contains("{\\fnVerdana\\fs52\\fsp1.25"), "single SRT cue uses common Fontsize");
             True(output.Contains("{\\fnArial\\fs52\\fsp1.25"), "bilingual SRT primary line uses common Fontsize");
@@ -144,6 +148,26 @@ namespace EmbySubtitleOptimization.Tests
             True(output.Contains("test-marker"), "generation marker is added");
         }
 
+        private static void TestSubtitlePositionModes()
+        {
+            const string ass = "[Script Info]\nScriptType: v4.00+\nPlayResX: 384\nPlayResY: 288\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, Bold, Italic, Underline, StrikeOut, Spacing, Angle, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,20,&H00FFFFFF,0,0,0,0,0,0,7,10,20,30,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:03.00,Default,,11,22,33,,{\\an7\\pos(100,80)}定位字幕";
+            var profile = ResolutionProfile.FromVideo(3840, 2160, new PluginOptions());
+
+            var preserved = AssSubtitleOptimizer.Optimize(ass, profile, new PluginOptions(), "preserve-position");
+            True(preserved.Contains("{\\fs17}{\\an7\\pos(100,80)}定位字幕"), "default position mode preserves inline alignment and position");
+            True(preserved.Contains(",Default,,11,22,33,,"), "default position mode preserves Dialogue margins");
+            True(preserved.Contains(",7,10,20,30,1"), "default position mode preserves Style alignment and margins");
+
+            var bottomOptions = new PluginOptions
+            {
+                PositionMode = SubtitlePositionMode.BottomCenter,
+                BottomDistance1080P = 60
+            };
+            var bottom = AssSubtitleOptimizer.Optimize(ass, profile, bottomOptions, "bottom-center");
+            True(bottom.Contains("{\\an2\\pos(192,272)}"), "bottom-center mode scales the configured distance to the ASS canvas");
+            True(!bottom.Contains("\\an7") && !bottom.Contains("\\pos(100,80)"), "bottom-center mode replaces original inline positioning");
+        }
+
         private static void TestFileProcessingIsIncremental()
         {
             var directory = Path.Combine(Path.GetTempPath(), "eso-tests-" + Guid.NewGuid().ToString("N"));
@@ -157,7 +181,7 @@ namespace EmbySubtitleOptimization.Tests
                 var processor = new SubtitleFileProcessor();
                 var options = new PluginOptions();
                 True(processor.Process(source, target, 3840, 2160, options).Changed, "first file processing writes output");
-                True(File.ReadAllText(target).Contains("revision=2"), "file marker records processing revision");
+                True(File.ReadAllText(target).Contains("revision=3"), "file marker records processing revision");
                 True(File.ReadAllText(target).Contains("profile=4K"), "file marker records resolution profile");
                 True(!processor.Process(source, target, 3840, 2160, options).Changed, "unchanged file is skipped");
 

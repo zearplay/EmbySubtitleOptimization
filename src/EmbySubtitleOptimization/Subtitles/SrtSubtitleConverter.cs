@@ -53,6 +53,9 @@ namespace EmbySubtitleOptimization.Subtitles
         {
             var font = string.IsNullOrWhiteSpace(options.SrtDefaultFontName) ? "Arial" : options.SrtDefaultFontName.Replace(",", string.Empty);
             var fontSize = options.CommonFontSize > 0 ? options.CommonFontSize : profile.FontSize;
+            var marginV = options.PositionMode == SubtitlePositionMode.BottomCenter
+                ? Math.Max(0, (int)Math.Round(options.BottomDistance1080P * profile.Height / 1080.0))
+                : profile.MarginV;
             builder.AppendLine("[Script Info]")
                 .Append("; ").AppendLine(generationMarker)
                 .AppendLine("ScriptType: v4.00+")
@@ -65,7 +68,7 @@ namespace EmbySubtitleOptimization.Subtitles
                 .Append("Style: ESO,").Append(font).Append(',').Append(fontSize.ToString("0.##", CultureInfo.InvariantCulture))
                 .Append(",&H00FFFFFF,0,0,0,0,")
                 .Append(options.PrimaryCharacterSpacing.ToString("0.##", CultureInfo.InvariantCulture)).Append(",0,2,")
-                .Append(profile.Width / 20).Append(',').Append(profile.Width / 20).Append(',').Append(profile.MarginV)
+                .Append(profile.Width / 20).Append(',').Append(profile.Width / 20).Append(',').Append(marginV)
                 .AppendLine(",1")
                 .AppendLine()
                 .AppendLine("[Events]")

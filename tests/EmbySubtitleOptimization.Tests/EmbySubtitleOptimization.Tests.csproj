@@ -13,5 +13,6 @@
     <Compile Include="../../src/EmbySubtitleOptimization/Subtitles/SubtitleStyleFormatter.cs" Link="Subtitles/SubtitleStyleFormatter.cs" />
     <Compile Include="../../src/EmbySubtitleOptimization/Subtitles/SubtitleFileProcessor.cs" Link="Subtitles/SubtitleFileProcessor.cs" />
     <Compile Include="../../src/EmbySubtitleOptimization/SubtitleFontStyle.cs" Link="SubtitleFontStyle.cs" />
+    <Compile Include="../../src/EmbySubtitleOptimization/SubtitlePositionMode.cs" Link="SubtitlePositionMode.cs" />
   </ItemGroup>
 </Project>

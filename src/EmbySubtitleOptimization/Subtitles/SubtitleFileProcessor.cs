@@ -7,7 +7,7 @@ namespace EmbySubtitleOptimization.Subtitles
 {
     internal sealed class SubtitleFileProcessor
     {
-        private const int ProcessingRevision = 2;
+        private const int ProcessingRevision = 3;
 
         public ProcessResult Process(string sourcePath, string targetPath, int videoWidth, int videoHeight, PluginOptions options)
         {
@@ -46,7 +46,7 @@ namespace EmbySubtitleOptimization.Subtitles
                 options.PrimarySubtitleColor, options.SecondarySubtitleColor,
                 options.PrimaryFontStyle, options.SecondaryFontStyle,
                 options.PrimaryCharacterSpacing, options.SecondaryCharacterSpacing,
-                options.BilingualLineSpacing
+                options.BilingualLineSpacing, options.PositionMode, options.BottomDistance1080P
             });
 
             using (var sha = SHA256.Create())

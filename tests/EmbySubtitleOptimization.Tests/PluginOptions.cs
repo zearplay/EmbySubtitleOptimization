@@ -18,5 +18,7 @@ namespace EmbySubtitleOptimization
         public double PrimaryCharacterSpacing { get; set; }
         public double SecondaryCharacterSpacing { get; set; }
         public int BilingualLineSpacing { get; set; } = 0;
+        public SubtitlePositionMode PositionMode { get; set; } = SubtitlePositionMode.PreserveOriginal;
+        public int BottomDistance1080P { get; set; } = 60;
     }
 }

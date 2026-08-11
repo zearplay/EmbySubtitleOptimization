@@ -38,6 +38,8 @@ namespace EmbySubtitleOptimization
             PrimaryCharacterSpacing = 0;
             SecondaryCharacterSpacing = 0;
             BilingualLineSpacing = 0;
+            PositionMode = SubtitlePositionMode.PreserveOriginal;
+            BottomDistance1080P = 60;
             OutputSuffix = "optimized";
         }
 
@@ -80,6 +82,14 @@ namespace EmbySubtitleOptimization
         [DisplayName("双字幕上下间隔")]
         [Description("以 1080p 字幕画布像素为基准；默认值为 0，不添加额外间隔。2K 和 4K 会按高度同比例放大。")]
         public int BilingualLineSpacing { get; set; }
+
+        [DisplayName("字幕位置")]
+        [Description("默认不修改 ASS/SSA 的原始 Style、定位标签、对齐方式和边距；也可统一设置为最底部居中。")]
+        public SubtitlePositionMode PositionMode { get; set; }
+
+        [DisplayName("距最底部距离")]
+        [Description("仅在“最底部居中”时生效。以 1080p 画布像素为基准，2K 和 4K 按字幕画布高度同比例换算。默认值为 60。")]
+        public int BottomDistance1080P { get; set; }
 
         [DisplayName("输出文件后缀")]
         [Description("生成文件名中的标记。只能包含英文字母、数字、连字符或下划线。")]
@@ -209,6 +219,11 @@ namespace EmbySubtitleOptimization
             if (BilingualLineSpacing < 0 || BilingualLineSpacing > 80)
             {
                 context.AddValidationError(nameof(BilingualLineSpacing), "双字幕上下间隔必须在 0 到 80 之间。 ");
+            }
+
+            if (BottomDistance1080P < 0 || BottomDistance1080P > 540)
+            {
+                context.AddValidationError(nameof(BottomDistance1080P), "距最底部距离必须在 0 到 540 之间。 ");
             }
 
             if (string.IsNullOrWhiteSpace(OutputSuffix) || !System.Text.RegularExpressions.Regex.IsMatch(OutputSuffix, "^[A-Za-z0-9_-]+$"))

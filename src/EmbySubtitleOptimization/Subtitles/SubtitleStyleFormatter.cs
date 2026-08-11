@@ -24,7 +24,7 @@ namespace EmbySubtitleOptimization.Subtitles
             string singleFontName = null,
             double? styleFontSize = null)
         {
-            var sanitizedText = RemoveInlineStyleResets(RemoveForbiddenInlineTags(text));
+            var sanitizedText = RemoveForbiddenInlineTags(text);
             var inheritedFontSize = styleFontSize > 0 ? styleFontSize.Value : profile.FontSize;
             var baseFontSize = options.CommonFontSize > 0 ? options.CommonFontSize : inheritedFontSize;
             var primaryFontSize = ScaleFontSize(baseFontSize, options.PrimaryFontSizePercent);
@@ -45,13 +45,16 @@ namespace EmbySubtitleOptimization.Subtitles
             if (!isBilingual)
             {
                 var fontName = string.IsNullOrWhiteSpace(singleFontName) ? options.PrimaryFontName : singleFontName;
-                var styled = BuildOverride(options.PrimarySubtitleColor, options.PrimaryFontStyle, fontName, primaryFontSize, options.PrimaryCharacterSpacing) + inheritedFontSizeText;
+                var singleOverride = BuildOverride(options.PrimarySubtitleColor, options.PrimaryFontStyle, fontName, primaryFontSize, options.PrimaryCharacterSpacing);
+                var styled = singleOverride + ReapplyOverrideAfterStyleResets(inheritedFontSizeText, singleOverride);
                 return Optimize(styled, profile, options);
             }
 
             var primaryOverride = BuildOverride(options.PrimarySubtitleColor, options.PrimaryFontStyle, options.PrimaryFontName, primaryFontSize, options.PrimaryCharacterSpacing);
             var secondaryOverride = BuildOverride(options.SecondarySubtitleColor, options.SecondaryFontStyle, options.SecondaryFontName, secondaryFontSize, options.SecondaryCharacterSpacing);
-            var bilingualText = primaryOverride + originalLines[0] + "\\N" + secondaryOverride + originalLines[1];
+            var primaryText = ReapplyOverrideAfterStyleResets(originalLines[0], primaryOverride);
+            var secondaryText = ReapplyOverrideAfterStyleResets(originalLines[1], secondaryOverride);
+            var bilingualText = primaryOverride + primaryText + "\\N" + secondaryOverride + secondaryText;
             var optimized = Optimize(bilingualText, profile, options);
             return InsertBilingualGap(optimized, secondaryOverride, profile, options.BilingualLineSpacing);
         }
@@ -78,14 +81,17 @@ namespace EmbySubtitleOptimization.Subtitles
             });
         }
 
-        internal static string RemoveInlineStyleResets(string text)
+        internal static string ReapplyOverrideAfterStyleResets(string text, string styleOverride)
         {
             if (string.IsNullOrEmpty(text)) return text;
+            var overrideTags = styleOverride.TrimStart('{').TrimEnd('}');
 
             return AssOverrideBlockRegex.Replace(text, match =>
             {
-                var tags = InlineStyleResetRegex.Replace(match.Groups["tags"].Value, string.Empty);
-                return tags.Length == 0 ? string.Empty : "{" + tags + "}";
+                var tags = InlineStyleResetRegex.Replace(
+                    match.Groups["tags"].Value,
+                    reset => reset.Value + overrideTags);
+                return "{" + tags + "}";
             });
         }
 
@@ -96,6 +102,7 @@ namespace EmbySubtitleOptimization.Subtitles
             var inherited = AssOverrideBlockRegex.Replace(text, match =>
             {
                 var tags = InlineFontSizeRegex.Replace(match.Groups["tags"].Value, string.Empty);
+                tags = InlineStyleResetRegex.Replace(tags, reset => reset.Value + replacement);
                 return tags.Length == 0 ? string.Empty : "{" + tags + "}";
             });
             return "{" + replacement + "}" + inherited;

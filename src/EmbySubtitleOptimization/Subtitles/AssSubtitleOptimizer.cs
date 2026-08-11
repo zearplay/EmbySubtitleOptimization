@@ -8,10 +8,17 @@ namespace EmbySubtitleOptimization.Subtitles
 {
     internal static class AssSubtitleOptimizer
     {
+        private static readonly Regex InlinePositionRegex = new Regex(
+            @"\\(?:pos|move)\s*\([^)]*\)|\\an[1-9](?!\d)|\\a\d+(?!\d)",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex OverrideBlockRegex = new Regex(@"\{(?<tags>[^}]*)\}", RegexOptions.Compiled);
+
         public static string Optimize(string content, ResolutionProfile profile, PluginOptions options, string generationMarker)
         {
             var normalized = NormalizeNewLines(content);
             var lines = normalized.Split('\n').ToList();
+            var scriptWidth = ReadScriptResolution(lines, "PlayResX", profile.Width);
+            var scriptHeight = ReadScriptResolution(lines, "PlayResY", profile.Height);
             var styleFontSizes = ReadStyleFontSizes(lines);
             RemoveForbiddenStyleFields(lines);
             var eventSection = false;
@@ -66,7 +73,13 @@ namespace EmbySubtitleOptimization.Subtitles
                 var fontSize = styleFontSizes.TryGetValue(styleName, out var configuredFontSize)
                     ? configuredFontSize
                     : profile.FontSize;
-                fieldsInEvent[textIndex] = SubtitleStyleFormatter.FormatAndOptimize(fieldsInEvent[textIndex], profile, options, null, fontSize);
+                var formattedText = SubtitleStyleFormatter.FormatAndOptimize(fieldsInEvent[textIndex], profile, options, null, fontSize);
+                if (options.PositionMode == SubtitlePositionMode.BottomCenter)
+                {
+                    formattedText = ForceBottomCenter(formattedText, scriptWidth, scriptHeight, options.BottomDistance1080P);
+                }
+
+                fieldsInEvent[textIndex] = formattedText;
                 lines[index] = lines[index].Substring(0, prefixLength) + string.Join(",", fieldsInEvent);
             }
 
@@ -81,6 +94,35 @@ namespace EmbySubtitleOptimization.Subtitles
         private static string NormalizeNewLines(string content)
         {
             return Regex.Replace(content ?? string.Empty, "\\r\\n?", "\n");
+        }
+
+        private static int ReadScriptResolution(IEnumerable<string> lines, string fieldName, int fallback)
+        {
+            foreach (var line in lines)
+            {
+                var trimmed = line.Trim();
+                if (!trimmed.StartsWith(fieldName + ":", StringComparison.OrdinalIgnoreCase)) continue;
+                if (double.TryParse(trimmed.Substring(trimmed.IndexOf(':') + 1).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+                    && value > 0)
+                {
+                    return Math.Max(1, (int)Math.Round(value));
+                }
+            }
+
+            return Math.Max(1, fallback);
+        }
+
+        private static string ForceBottomCenter(string text, int scriptWidth, int scriptHeight, int bottomDistance1080P)
+        {
+            var withoutOriginalPosition = OverrideBlockRegex.Replace(text ?? string.Empty, match =>
+            {
+                var tags = InlinePositionRegex.Replace(match.Groups["tags"].Value, string.Empty);
+                return tags.Length == 0 ? string.Empty : "{" + tags + "}";
+            });
+            var scaledDistance = (int)Math.Round(bottomDistance1080P * scriptHeight / 1080.0);
+            var x = scriptWidth / 2;
+            var y = Math.Max(0, scriptHeight - scaledDistance);
+            return "{\\an2\\pos(" + x.ToString(CultureInfo.InvariantCulture) + "," + y.ToString(CultureInfo.InvariantCulture) + ")}" + withoutOriginalPosition;
         }
 
         private static IReadOnlyDictionary<string, double> ReadStyleFontSizes(IReadOnlyList<string> lines)
