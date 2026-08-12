@@ -11,6 +11,7 @@ namespace EmbySubtitleOptimization
         public string SrtDefaultFontName { get; set; } = "Arial";
         public int PrimaryFontSizePercent { get; set; } = 100;
         public int SecondaryFontSizePercent { get; set; } = 70;
+        public int SecondaryUpwardOffsetPercent { get; set; } = 60;
         public string PrimarySubtitleColor { get; set; } = "#FFFFFF";
         public string SecondarySubtitleColor { get; set; } = "#FFD966";
         public bool PrimaryBorderEnabled { get; set; } = true;

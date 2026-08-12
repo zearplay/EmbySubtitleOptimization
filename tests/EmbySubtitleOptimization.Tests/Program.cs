@@ -89,6 +89,7 @@ namespace EmbySubtitleOptimization.Tests
             Equal(17d, options.CommonFontSize, "common Fontsize defaults to 17");
             Equal("Source Han Sans SC", options.PrimaryFontName, "primary font defaults to Source Han Sans SC");
             Equal(70, options.SecondaryFontSizePercent, "secondary Fontsize ratio defaults to 70 percent");
+            Equal(60, options.SecondaryUpwardOffsetPercent, "secondary upward offset defaults to 60 percent of its Fontsize");
             Equal(0, options.BilingualLineSpacing, "bilingual spacing defaults to zero");
             Equal(0.1d, options.PrimaryBorderWidth, "primary border width defaults to 0.1");
             Equal(0.1d, options.SecondaryBorderWidth, "secondary border width defaults to 0.1");
@@ -183,6 +184,7 @@ namespace EmbySubtitleOptimization.Tests
                 SecondaryFontName = "Helvetica",
                 SrtDefaultFontName = "Verdana",
                 CommonFontSize = 52,
+                SecondaryUpwardOffsetPercent = 50,
                 PrimaryCharacterSpacing = 1.25,
                 SecondaryCharacterSpacing = -0.5,
                 PositionMode = SubtitlePositionMode.BottomCenter,
@@ -200,7 +202,7 @@ namespace EmbySubtitleOptimization.Tests
             True(output.Contains("{\\fnHelvetica\\fs36.4\\fsp-0.5"), "bilingual SRT secondary line uses its percentage of common Fontsize");
             Equal(3, output.Split('\n').Count(line => line.StartsWith("Dialogue:", StringComparison.Ordinal)), "bilingual SRT cue is emitted as two synchronized events");
             True(output.Contains(",ESO,ESO,0,0,0,,{\\an2\\pos(960,954)}{\\fnArial\\fs52"), "SRT primary line uses the shared centered boundary");
-            True(output.Contains(",ESO,ESO,0,0,0,,{\\an8\\pos(960,954)}{\\fnHelvetica\\fs36.4"), "SRT secondary line uses the same centered boundary");
+            True(output.Contains(",ESO,ESO,0,0,0,,{\\an8\\pos(960,936)}{\\fnHelvetica\\fs36.4"), "SRT secondary line uses the configured upward offset percentage");
             True(!output.Contains("{\\i1}"), "SRT italic markup cannot override the configured font style");
             True(output.Contains("\\N"), "long SRT cue wraps");
         }
@@ -239,7 +241,7 @@ namespace EmbySubtitleOptimization.Tests
             True(output.Contains("test-marker"), "generation marker is added");
             Equal(2, output.Split('\n').Count(line => line.StartsWith("Dialogue:", StringComparison.Ordinal)), "bilingual ASS cue is emitted as two synchronized events");
             True(output.Contains(",Default,,0,0,0,,{\\an2\\pos(960,255)}{\\fnSource Han Sans SC\\fs33"), "ASS primary line uses the shared centered boundary");
-            True(output.Contains(",Default,,0,0,0,,{\\an8\\pos(960,255)}{\\fnArial\\fs23.1"), "ASS secondary line uses the same centered boundary");
+            True(output.Contains(",Default,,0,0,0,,{\\an8\\pos(960,241)}{\\fnArial\\fs23.1"), "ASS secondary line is centered and shifted upward in proportion to its Fontsize");
 
             var ssaOutput = AssSubtitleOptimizer.Optimize(
                 ass.Replace("[V4+ Styles]", "[V4 Styles]").Replace("OutlineColour", "TertiaryColour"),
@@ -273,9 +275,9 @@ namespace EmbySubtitleOptimization.Tests
 
             Equal(4, dialogues.Length, "each ordinary bilingual cue produces primary and secondary events");
             True(dialogues[0].Contains(",Bottom,,0,0,0,,{\\an2\\pos(960,1010)}{\\fnSource Han Sans SC\\fs150"), "bottom primary uses the top edge of the secondary block as its bottom anchor");
-            True(dialogues[1].Contains(",Bottom,,0,0,0,,{\\an8\\pos(960,1010)}{\\fnArial\\fs50"), "bottom secondary shares the primary boundary and horizontal center");
+            True(dialogues[1].Contains(",Bottom,,0,0,0,,{\\an8\\pos(960,980)}{\\fnArial\\fs50"), "bottom secondary is centered and shifted upward in proportion to its Fontsize");
             True(dialogues[2].Contains(",Top,,0,0,0,,{\\an2\\pos(960,170)}{\\fnSource Han Sans SC\\fs150"), "top primary ends at the shared boundary");
-            True(dialogues[3].Contains(",Top,,0,0,0,,{\\an8\\pos(960,170)}{\\fnArial\\fs50"), "top secondary begins at the shared boundary and horizontal center");
+            True(dialogues[3].Contains(",Top,,0,0,0,,{\\an8\\pos(960,140)}{\\fnArial\\fs50"), "top secondary is centered and shifted upward in proportion to its Fontsize");
             True(dialogues.All(line => !line.Contains("\\N")), "short bilingual lines no longer depend on multiline line-height calculation");
         }
 
@@ -374,7 +376,7 @@ namespace EmbySubtitleOptimization.Tests
                 var processor = new SubtitleFileProcessor();
                 var options = new PluginOptions();
                 True(processor.Process(source, target, 3840, 2160, options).Changed, "first file processing writes output");
-                True(File.ReadAllText(target).Contains("revision=22"), "file marker records processing revision");
+                True(File.ReadAllText(target).Contains("revision=24"), "file marker records processing revision");
                 True(File.ReadAllText(target).Contains("profile=4K"), "file marker records resolution profile");
                 True(!processor.Process(source, target, 3840, 2160, options).Changed, "unchanged file is skipped");
 

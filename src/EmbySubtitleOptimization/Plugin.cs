@@ -153,8 +153,13 @@ namespace EmbySubtitleOptimization
                 options.EnableWebFullscreenCanvasFix = true;
             }
 
+            if (options.SettingsSchemaVersion < 9)
+            {
+                options.SecondaryUpwardOffsetPercent = 60;
+            }
+
             options.FontName = null;
-            options.SettingsSchemaVersion = 8;
+            options.SettingsSchemaVersion = 9;
         }
     }
 }

@@ -29,6 +29,7 @@ namespace EmbySubtitleOptimization
             SrtDefaultFontName = "Arial";
             PrimaryFontSizePercent = 100;
             SecondaryFontSizePercent = 70;
+            SecondaryUpwardOffsetPercent = 60;
             SingleSubtitleColor = "#FFFFFF";
             PrimarySubtitleColor = "#FFFFFF";
             SecondarySubtitleColor = "#FFD966";
@@ -85,7 +86,7 @@ namespace EmbySubtitleOptimization
         public string SrtDefaultFontName { get; set; }
 
         [DisplayName("双字幕上下间隔")]
-        [Description("普通双字幕共享同一个水平锚点，并按照主、副字幕的边缘紧凑排列。此值只增加额外间隔，以 1080p 字幕画布像素为基准；默认值为 0。")]
+        [Description("普通双字幕使用相同的水平锚点，副字幕按照自身字号的 60% 向上靠近主字幕。此值用于增加额外间隔，以 1080p 字幕画布像素为基准；默认值为 0。")]
         public int BilingualLineSpacing { get; set; }
 
         [DisplayName("字幕位置")]
@@ -154,6 +155,10 @@ namespace EmbySubtitleOptimization
         [DisplayName("Fontsize 比例")]
         [Description("以 Dialogue 引用 Style 的 Fontsize 为基准。默认值为 70。")]
         public int SecondaryFontSizePercent { get; set; }
+
+        [DisplayName("向上偏移比例")]
+        [Description("按副字幕 Fontsize 的百分比向上移动副字幕。0 表示不偏移，默认值为 60。")]
+        public int SecondaryUpwardOffsetPercent { get; set; }
 
         [DisplayName("字体颜色")]
         [Description("双字幕第二行使用的颜色。使用 #RRGGBB 或 #AARRGGBB 格式。")]
@@ -232,6 +237,11 @@ namespace EmbySubtitleOptimization
             if (SecondaryFontSizePercent < 50 || SecondaryFontSizePercent > 200)
             {
                 context.AddValidationError(nameof(SecondaryFontSizePercent), "副字幕 Fontsize 比例必须在 50 到 200 之间。 ");
+            }
+
+            if (SecondaryUpwardOffsetPercent < 0 || SecondaryUpwardOffsetPercent > 200)
+            {
+                context.AddValidationError(nameof(SecondaryUpwardOffsetPercent), "副字幕向上偏移比例必须在 0 到 200 之间。 ");
             }
 
             if (PrimaryCharacterSpacing < -20 || PrimaryCharacterSpacing > 50)

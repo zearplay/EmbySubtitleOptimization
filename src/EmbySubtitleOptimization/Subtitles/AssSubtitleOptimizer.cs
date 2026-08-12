@@ -100,6 +100,9 @@ namespace EmbySubtitleOptimization.Subtitles
                             var primaryFields = (string[])fieldsInEvent.Clone();
                             var secondaryFields = (string[])fieldsInEvent.Clone();
                             var gap = CalculateBilingualGap(scriptHeight, profile, options.BilingualLineSpacing);
+                            var secondaryUpwardOffset = CalculateSecondaryUpwardOffset(
+                                formatted.SecondaryFontSize,
+                                options.SecondaryUpwardOffsetPercent);
                             var boundaryY = Math.Max(
                                 0,
                                 scriptHeight
@@ -109,7 +112,7 @@ namespace EmbySubtitleOptimization.Subtitles
                             ClearEventMargins(primaryFields, marginLIndex, marginRIndex, marginVIndex);
                             ClearEventMargins(secondaryFields, marginLIndex, marginRIndex, marginVIndex);
                             primaryFields[textIndex] = ForcePosition(formatted.PrimaryText, 2, scriptWidth / 2, boundaryY);
-                            secondaryFields[textIndex] = ForcePosition(formatted.SecondaryText, 8, scriptWidth / 2, boundaryY + gap);
+                            secondaryFields[textIndex] = ForcePosition(formatted.SecondaryText, 8, scriptWidth / 2, boundaryY + gap - secondaryUpwardOffset);
                             lines[index] = BuildEventLine(lines[index], prefixLength, primaryFields);
                             lines.Insert(index + 1, BuildEventLine(lines[index], prefixLength, secondaryFields));
                             index++;
@@ -138,6 +141,9 @@ namespace EmbySubtitleOptimization.Subtitles
                     var effectiveMarginR = ReadEventMargin(fieldsInEvent, marginRIndex, stylePosition.MarginR);
                     var effectiveMarginV = ReadEventMargin(fieldsInEvent, marginVIndex, stylePosition.MarginV);
                     var gap = CalculateBilingualGap(scriptHeight, profile, options.BilingualLineSpacing);
+                    var secondaryUpwardOffset = CalculateSecondaryUpwardOffset(
+                        formatted.SecondaryFontSize,
+                        options.SecondaryUpwardOffsetPercent);
                     var primaryHeight = CalculateBlockHeight(formatted.PrimaryFontSize, formatted.PrimaryLineCount);
                     var secondaryHeight = CalculateBlockHeight(formatted.SecondaryFontSize, formatted.SecondaryLineCount);
                     var boundaryY = CalculateBoundaryY(
@@ -155,7 +161,7 @@ namespace EmbySubtitleOptimization.Subtitles
                     ClearEventMargins(primaryFields, marginLIndex, marginRIndex, marginVIndex);
                     ClearEventMargins(secondaryFields, marginLIndex, marginRIndex, marginVIndex);
                     primaryFields[textIndex] = ForcePosition(formatted.PrimaryText, primaryAlignment, x, boundaryY);
-                    secondaryFields[textIndex] = ForcePosition(formatted.SecondaryText, secondaryAlignment, x, boundaryY + gap);
+                    secondaryFields[textIndex] = ForcePosition(formatted.SecondaryText, secondaryAlignment, x, boundaryY + gap - secondaryUpwardOffset);
                     lines[index] = BuildEventLine(lines[index], prefixLength, primaryFields);
                     lines.Insert(index + 1, BuildEventLine(lines[index], prefixLength, secondaryFields));
                     index++;
@@ -257,6 +263,11 @@ namespace EmbySubtitleOptimization.Subtitles
         private static int CalculateBlockHeight(double fontSize, int lineCount)
         {
             return Math.Max(1, (int)Math.Round(fontSize * Math.Max(1, lineCount), MidpointRounding.AwayFromZero));
+        }
+
+        private static int CalculateSecondaryUpwardOffset(double fontSize, int percent)
+        {
+            return Math.Max(0, (int)Math.Round(fontSize * percent / 100.0, MidpointRounding.AwayFromZero));
         }
 
         private static int ReadEventMargin(string[] fields, int fieldIndex, int styleMargin)
