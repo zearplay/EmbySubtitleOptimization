@@ -1,0 +1,30 @@
+name: Publish release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: startsWith(github.event.head_commit.message, 'Release ')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_version="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)"
+          release_tag="v${release_version}"
+          git log -1 --pretty=%B > /tmp/eso-release-notes.md
+          gh release create "${release_tag}" \
+            "artifacts/plugin/EmbySubtitleOptimization.dll#EmbySubtitleOptimization.dll" \
+            --target "${GITHUB_SHA}" \
+            --title "${release_tag}" \
+            --notes-file /tmp/eso-release-notes.md
