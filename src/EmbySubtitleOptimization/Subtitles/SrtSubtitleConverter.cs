@@ -29,7 +29,7 @@ namespace EmbySubtitleOptimization.Subtitles
                     profile,
                     options,
                     options.SrtDefaultFontName,
-                    profile.FontSize);
+                    profile.Height);
 
                 if (formatted.IsBilingual)
                 {
@@ -47,23 +47,23 @@ namespace EmbySubtitleOptimization.Subtitles
                         - CalculateBlockHeight(formatted.SecondaryFontSize, formatted.SecondaryLineCount)
                         - gap);
                     var centerX = profile.Width / 2;
-                    AppendDialogue(builder, cue, 0, ForcePosition(formatted.PrimaryText, 2, centerX, boundaryY));
-                    AppendDialogue(builder, cue, 0, ForcePosition(formatted.SecondaryText, 8, centerX, boundaryY + gap - secondaryUpwardOffset));
+                    AppendDialogue(builder, cue, "ESO", 0, ForcePosition(formatted.PrimaryText, 2, centerX, boundaryY));
+                    AppendDialogue(builder, cue, "ESO.Secondary", 0, ForcePosition(formatted.SecondaryText, 8, centerX, boundaryY + gap - secondaryUpwardOffset));
                     continue;
                 }
 
-                AppendDialogue(builder, cue, 0, formatted.Text);
+                AppendDialogue(builder, cue, "ESO", 0, formatted.Text);
             }
 
             return builder.ToString();
         }
 
-        private static void AppendDialogue(StringBuilder builder, Cue cue, int marginV, string text)
+        private static void AppendDialogue(StringBuilder builder, Cue cue, string styleName, int marginV, string text)
         {
             builder.Append("Dialogue: 0,")
                 .Append(ToAssTime(cue.Start)).Append(',')
                 .Append(ToAssTime(cue.End))
-                .Append(",ESO,ESO,0,0,")
+                .Append(',').Append(styleName).Append(",ESO,0,0,")
                 .Append(marginV.ToString(CultureInfo.InvariantCulture))
                 .Append(",,")
                 .Append(text)
@@ -103,7 +103,14 @@ namespace EmbySubtitleOptimization.Subtitles
         private static void AppendHeader(StringBuilder builder, ResolutionProfile profile, PluginOptions options, string generationMarker)
         {
             var font = string.IsNullOrWhiteSpace(options.SrtDefaultFontName) ? "Arial" : options.SrtDefaultFontName.Replace(",", string.Empty);
-            var fontSize = options.CommonFontSize > 0 ? options.CommonFontSize : profile.FontSize;
+            var primaryFontSize = SubtitleStyleFormatter.ScaleFontSizeFrom1080(
+                options.CommonFontSize,
+                profile.Height,
+                options.PrimaryFontSizePercent);
+            var secondaryFontSize = SubtitleStyleFormatter.ScaleFontSizeFrom1080(
+                options.CommonFontSize,
+                profile.Height,
+                options.SecondaryFontSizePercent);
             var marginV = options.PositionMode == SubtitlePositionMode.BottomCenter
                 ? profile.ScaleVerticalFrom1080(options.BottomDistance1080P)
                 : profile.MarginV;
@@ -116,9 +123,14 @@ namespace EmbySubtitleOptimization.Subtitles
                 .AppendLine()
                 .AppendLine("[V4+ Styles]")
                 .AppendLine("Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, Bold, Italic, Underline, StrikeOut, Spacing, Angle, BorderStyle, Outline, Alignment, MarginL, MarginR, MarginV, Encoding")
-                .Append("Style: ESO,").Append(font).Append(',').Append(fontSize.ToString("0.##", CultureInfo.InvariantCulture))
+                .Append("Style: ESO,").Append(font).Append(',').Append(primaryFontSize.ToString("0.##", CultureInfo.InvariantCulture))
                 .Append(",&H00FFFFFF,&H00000000,0,0,0,0,")
                 .Append(options.PrimaryCharacterSpacing.ToString("0.##", CultureInfo.InvariantCulture)).Append(",0,1,0.1,2,")
+                .Append(profile.Width / 20).Append(',').Append(profile.Width / 20).Append(',').Append(marginV)
+                .AppendLine(",1")
+                .Append("Style: ESO.Secondary,").Append(font).Append(',').Append(secondaryFontSize.ToString("0.##", CultureInfo.InvariantCulture))
+                .Append(",&H00FFFFFF,&H00000000,0,0,0,0,")
+                .Append(options.SecondaryCharacterSpacing.ToString("0.##", CultureInfo.InvariantCulture)).Append(",0,1,0.1,2,")
                 .Append(profile.Width / 20).Append(',').Append(profile.Width / 20).Append(',').Append(marginV)
                 .AppendLine(",1")
                 .AppendLine()

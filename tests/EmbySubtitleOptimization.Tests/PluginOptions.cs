@@ -5,7 +5,7 @@ namespace EmbySubtitleOptimization
         public int MaxLineWidth1080P { get; set; } = 80;
         public int MaxLineWidth2K { get; set; } = 46;
         public int MaxLineWidth4K { get; set; } = 52;
-        public double CommonFontSize { get; set; } = 17;
+        public double CommonFontSize { get; set; } = 70;
         public string PrimaryFontName { get; set; } = "Source Han Sans SC";
         public string SecondaryFontName { get; set; } = "Arial";
         public string SrtDefaultFontName { get; set; } = "Arial";

@@ -19,7 +19,7 @@ namespace EmbySubtitleOptimization
             MaxLineWidth1080P = 80;
             MaxLineWidth2K = 46;
             MaxLineWidth4K = 52;
-            CommonFontSize = 17;
+            CommonFontSize = 70;
             MaxBilingualWidthRatio = 1.45;
             MinHorizontalScalePercent = 70;
             MaxHorizontalScalePercent = 125;
@@ -77,7 +77,7 @@ namespace EmbySubtitleOptimization
         public int MaxLineWidth4K { get; set; }
 
         [DisplayName("Fontsize")]
-        [Description("统一基础字号，默认值为 17。设置为 0 时，ASS/SSA 使用 Style Fontsize，SRT 按视频分辨率自动选择。")]
+        [Description("唯一的基准字号，以 1920×1080 字幕画布为基准。主字幕、单字幕和副字幕均直接按“Fontsize × 实际字幕画布高度 ÷ 1080 × 对应比例 ÷ 100”计算并四舍五入为整数；输出文件只使用 Style Fontsize，不使用行内字号或缩放标签。默认值为 70。")]
         public double CommonFontSize { get; set; }
 
         [DisplayName("SRT 转 ASS 默认字体")]
@@ -116,7 +116,7 @@ namespace EmbySubtitleOptimization
         public string PrimaryFontName { get; set; }
 
         [DisplayName("Fontsize 比例（含单字幕）")]
-        [Description("以 Dialogue 引用 Style 的 Fontsize 为基准。100 表示保持 Style 字号。")]
+        [Description("应用于缩放后的基础 Fontsize。100 表示保持基础字号；单字幕与主字幕使用此比例。默认值为 100。")]
         public int PrimaryFontSizePercent { get; set; }
 
         [DisplayName("字体颜色（含单字幕）")]
@@ -153,7 +153,7 @@ namespace EmbySubtitleOptimization
         public string SecondaryFontName { get; set; }
 
         [DisplayName("Fontsize 比例")]
-        [Description("以 Dialogue 引用 Style 的 Fontsize 为基准。默认值为 70。")]
+        [Description("应用于缩放后的基础 Fontsize。默认值为 70。")]
         public int SecondaryFontSizePercent { get; set; }
 
         [DisplayName("向上偏移比例")]
@@ -224,9 +224,9 @@ namespace EmbySubtitleOptimization
         {
             ValidateWidth(context, nameof(MaxLineWidth1080P), MaxLineWidth1080P);
 
-            if (CommonFontSize != 0 && (CommonFontSize < 6 || CommonFontSize > 300))
+            if (CommonFontSize < 6 || CommonFontSize > 300)
             {
-                context.AddValidationError(nameof(CommonFontSize), "Fontsize 必须为 0，或在 6 到 300 之间。 ");
+                context.AddValidationError(nameof(CommonFontSize), "Fontsize 必须在 6 到 300 之间。 ");
             }
 
             if (PrimaryFontSizePercent < 50 || PrimaryFontSizePercent > 200)

@@ -158,8 +158,39 @@ namespace EmbySubtitleOptimization
                 options.SecondaryUpwardOffsetPercent = 60;
             }
 
+            if (options.SettingsSchemaVersion < 10)
+            {
+                if (options.CommonFontSize < 6 || options.CommonFontSize > 300)
+                {
+                    options.CommonFontSize = 17;
+                }
+            }
+
+            if (options.SettingsSchemaVersion < 11)
+            {
+                if (options.CommonFontSize < 6 || options.CommonFontSize > 300)
+                {
+                    options.CommonFontSize = 17;
+                }
+
+                if (options.PrimaryFontSizePercent < 50 || options.PrimaryFontSizePercent > 200)
+                {
+                    options.PrimaryFontSizePercent = 100;
+                }
+
+                if (options.SecondaryFontSizePercent < 50 || options.SecondaryFontSizePercent > 200)
+                {
+                    options.SecondaryFontSizePercent = 70;
+                }
+            }
+
+            if (options.SettingsSchemaVersion < 12 && options.CommonFontSize == 17)
+            {
+                options.CommonFontSize = 70;
+            }
+
             options.FontName = null;
-            options.SettingsSchemaVersion = 9;
+            options.SettingsSchemaVersion = 12;
         }
     }
 }

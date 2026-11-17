@@ -19,9 +19,8 @@ namespace EmbySubtitleOptimization.Subtitles
             var lines = normalized.Split('\n').ToList();
             var scriptWidth = ReadScriptResolution(lines, "PlayResX", profile.Width);
             var scriptHeight = ReadScriptResolution(lines, "PlayResY", profile.Height);
-            var styleFontSizes = ReadStyleFontSizes(lines);
             var stylePositions = ReadStylePositions(lines);
-            NormalizeStyleFields(lines, options);
+            var secondaryStyleNames = NormalizeStyleFields(lines, options, scriptHeight);
             var eventSection = false;
             var textIndex = 9;
             var styleIndex = 3;
@@ -84,10 +83,12 @@ namespace EmbySubtitleOptimization.Subtitles
                                      && !string.IsNullOrWhiteSpace(fieldsInEvent[effectIndex]);
                 var isSpecialEffect = hasEventEffect || TextLayout.IsSpecialEffect(originalText);
                 var styleName = styleIndex >= 0 && fieldsInEvent.Length > styleIndex ? fieldsInEvent[styleIndex].Trim() : string.Empty;
-                var fontSize = styleFontSizes.TryGetValue(styleName, out var configuredFontSize)
-                    ? configuredFontSize
-                    : profile.FontSize;
-                var formatted = SubtitleStyleFormatter.FormatAndOptimizeWithLayout(originalText, profile, options, null, fontSize);
+                var formatted = SubtitleStyleFormatter.FormatAndOptimizeWithLayout(
+                    originalText,
+                    profile,
+                    options,
+                    null,
+                    scriptHeight);
                 var formattedText = formatted.Text;
                 if (options.PositionMode == SubtitlePositionMode.BottomCenter && !isSpecialEffect)
                 {
@@ -111,6 +112,7 @@ namespace EmbySubtitleOptimization.Subtitles
                                 - gap);
                             ClearEventMargins(primaryFields, marginLIndex, marginRIndex, marginVIndex);
                             ClearEventMargins(secondaryFields, marginLIndex, marginRIndex, marginVIndex);
+                            SetSecondaryStyle(secondaryFields, styleIndex, styleName, secondaryStyleNames);
                             primaryFields[textIndex] = ForcePosition(formatted.PrimaryText, 2, scriptWidth / 2, boundaryY);
                             secondaryFields[textIndex] = ForcePosition(formatted.SecondaryText, 8, scriptWidth / 2, boundaryY + gap - secondaryUpwardOffset);
                             lines[index] = BuildEventLine(lines[index], prefixLength, primaryFields);
@@ -160,6 +162,7 @@ namespace EmbySubtitleOptimization.Subtitles
 
                     ClearEventMargins(primaryFields, marginLIndex, marginRIndex, marginVIndex);
                     ClearEventMargins(secondaryFields, marginLIndex, marginRIndex, marginVIndex);
+                    SetSecondaryStyle(secondaryFields, styleIndex, styleName, secondaryStyleNames);
                     primaryFields[textIndex] = ForcePosition(formatted.PrimaryText, primaryAlignment, x, boundaryY);
                     secondaryFields[textIndex] = ForcePosition(formatted.SecondaryText, secondaryAlignment, x, boundaryY + gap - secondaryUpwardOffset);
                     lines[index] = BuildEventLine(lines[index], prefixLength, primaryFields);
@@ -286,6 +289,19 @@ namespace EmbySubtitleOptimization.Subtitles
             if (marginVIndex >= 0 && fields.Length > marginVIndex) fields[marginVIndex] = "0";
         }
 
+        private static void SetSecondaryStyle(
+            string[] fields,
+            int styleIndex,
+            string sourceStyleName,
+            IReadOnlyDictionary<string, string> secondaryStyleNames)
+        {
+            if (styleIndex < 0 || fields.Length <= styleIndex) return;
+            if (secondaryStyleNames.TryGetValue(sourceStyleName, out var secondaryStyleName))
+            {
+                fields[styleIndex] = secondaryStyleName;
+            }
+        }
+
         private static int CalculateHorizontalAnchor(int horizontalIndex, int scriptWidth, int marginL, int marginR)
         {
             if (horizontalIndex == 0) return Math.Max(0, marginL);
@@ -331,47 +347,6 @@ namespace EmbySubtitleOptimization.Subtitles
         private static bool IsTopAligned(int alignment)
         {
             return alignment >= 7 && alignment <= 9;
-        }
-
-        private static IReadOnlyDictionary<string, double> ReadStyleFontSizes(IReadOnlyList<string> lines)
-        {
-            var result = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
-            var styleSection = false;
-            var fieldCount = 23;
-            var nameIndex = 0;
-            var fontSizeIndex = 2;
-
-            foreach (var line in lines)
-            {
-                var trimmed = line.Trim();
-                if (trimmed.StartsWith("[", StringComparison.Ordinal))
-                {
-                    styleSection = trimmed.Equals("[V4+ Styles]", StringComparison.OrdinalIgnoreCase)
-                                   || trimmed.Equals("[V4 Styles]", StringComparison.OrdinalIgnoreCase);
-                    continue;
-                }
-
-                if (!styleSection) continue;
-                if (trimmed.StartsWith("Format:", StringComparison.OrdinalIgnoreCase))
-                {
-                    var fields = trimmed.Substring(7).Split(',').Select(field => field.Trim()).ToArray();
-                    fieldCount = fields.Length;
-                    nameIndex = Array.FindIndex(fields, field => field.Equals("Name", StringComparison.OrdinalIgnoreCase));
-                    fontSizeIndex = Array.FindIndex(fields, field => field.Equals("Fontsize", StringComparison.OrdinalIgnoreCase));
-                    continue;
-                }
-
-                if (!trimmed.StartsWith("Style:", StringComparison.OrdinalIgnoreCase)) continue;
-                var values = trimmed.Substring(6).Split(new[] { ',' }, fieldCount);
-                if (nameIndex < 0 || fontSizeIndex < 0 || values.Length <= Math.Max(nameIndex, fontSizeIndex)) continue;
-                if (double.TryParse(values[fontSizeIndex].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var fontSize)
-                    && fontSize > 0)
-                {
-                    result[values[nameIndex].Trim()] = fontSize;
-                }
-            }
-
-            return result;
         }
 
         private static IReadOnlyDictionary<string, StylePosition> ReadStylePositions(IReadOnlyList<string> lines)
@@ -455,8 +430,13 @@ namespace EmbySubtitleOptimization.Subtitles
             }
         }
 
-        private static void NormalizeStyleFields(IList<string> lines, PluginOptions options)
+        private static IReadOnlyDictionary<string, string> NormalizeStyleFields(
+            IList<string> lines,
+            PluginOptions options,
+            int scriptHeight)
         {
+            var secondaryStyleNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var usedStyleNames = ReadStyleNames(lines);
             var styleSection = false;
             List<string> outputFields = null;
             List<int> sourceIndices = null;
@@ -502,6 +482,7 @@ namespace EmbySubtitleOptimization.Subtitles
                         sourceIndices.Add(fieldIndex);
                     }
 
+                    EnsureStyleField(outputFields, sourceIndices, "Fontsize");
                     EnsureStyleField(outputFields, sourceIndices, borderColorField);
                     EnsureStyleField(outputFields, sourceIndices, "BorderStyle");
                     EnsureStyleField(outputFields, sourceIndices, "Outline");
@@ -520,9 +501,7 @@ namespace EmbySubtitleOptimization.Subtitles
                     }
                     else if (outputFields[fieldIndex].Equals("Fontsize", StringComparison.OrdinalIgnoreCase))
                     {
-                        var sourceIndex = sourceIndices[fieldIndex];
-                        var sourceValue = sourceIndex >= 0 && sourceIndex < values.Length ? values[sourceIndex] : string.Empty;
-                        outputValues[fieldIndex] = ResolvePrimaryStyleFontSize(sourceValue, options);
+                        outputValues[fieldIndex] = ResolveFontSize(options, scriptHeight, options.PrimaryFontSizePercent);
                     }
                     else if (outputFields[fieldIndex].Equals("PrimaryColour", StringComparison.OrdinalIgnoreCase))
                     {
@@ -562,20 +541,84 @@ namespace EmbySubtitleOptimization.Subtitles
                 }
 
                 lines[index] = "Style: " + string.Join(",", outputValues);
+                var nameIndex = outputFields.FindIndex(field => field.Equals("Name", StringComparison.OrdinalIgnoreCase));
+                var fontSizeIndex = outputFields.FindIndex(field => field.Equals("Fontsize", StringComparison.OrdinalIgnoreCase));
+                if (nameIndex < 0 || fontSizeIndex < 0 || string.IsNullOrWhiteSpace(outputValues[nameIndex])) continue;
+
+                var sourceStyleName = outputValues[nameIndex].Trim();
+                if (!secondaryStyleNames.TryGetValue(sourceStyleName, out var secondaryStyleName))
+                {
+                    secondaryStyleName = CreateSecondaryStyleName(sourceStyleName, usedStyleNames);
+                    secondaryStyleNames[sourceStyleName] = secondaryStyleName;
+                }
+
+                var secondaryValues = (string[])outputValues.Clone();
+                secondaryValues[nameIndex] = secondaryStyleName;
+                secondaryValues[fontSizeIndex] = ResolveFontSize(
+                    options,
+                    scriptHeight,
+                    options.SecondaryFontSizePercent);
+                lines.Insert(index + 1, "Style: " + string.Join(",", secondaryValues));
+                index++;
             }
+
+            return secondaryStyleNames;
         }
 
-        private static string ResolvePrimaryStyleFontSize(string sourceValue, PluginOptions options)
+        private static HashSet<string> ReadStyleNames(IEnumerable<string> lines)
         {
-            var baseFontSize = options.CommonFontSize;
-            if (baseFontSize <= 0
-                && !double.TryParse(sourceValue, NumberStyles.Float, CultureInfo.InvariantCulture, out baseFontSize))
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var styleSection = false;
+            var fieldCount = 0;
+            var nameIndex = -1;
+            foreach (var line in lines)
             {
-                return sourceValue;
+                var trimmed = line.Trim();
+                if (trimmed.StartsWith("[", StringComparison.Ordinal))
+                {
+                    styleSection = trimmed.Equals("[V4+ Styles]", StringComparison.OrdinalIgnoreCase)
+                                   || trimmed.Equals("[V4 Styles]", StringComparison.OrdinalIgnoreCase);
+                    continue;
+                }
+
+                if (!styleSection) continue;
+                if (trimmed.StartsWith("Format:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var fields = trimmed.Substring(7).Split(',').Select(field => field.Trim()).ToArray();
+                    fieldCount = fields.Length;
+                    nameIndex = Array.FindIndex(fields, field => field.Equals("Name", StringComparison.OrdinalIgnoreCase));
+                    continue;
+                }
+
+                if (nameIndex < 0 || !trimmed.StartsWith("Style:", StringComparison.OrdinalIgnoreCase)) continue;
+                var values = trimmed.Substring(6).TrimStart().Split(new[] { ',' }, fieldCount);
+                if (values.Length > nameIndex && !string.IsNullOrWhiteSpace(values[nameIndex]))
+                {
+                    names.Add(values[nameIndex].Trim());
+                }
             }
 
-            var resolved = Math.Max(1, Math.Round(baseFontSize * options.PrimaryFontSizePercent / 100.0, 2));
-            return resolved.ToString("0.##", CultureInfo.InvariantCulture);
+            return names;
+        }
+
+        private static string CreateSecondaryStyleName(string sourceStyleName, ISet<string> usedStyleNames)
+        {
+            var baseName = sourceStyleName + ".ESO.Secondary";
+            var candidate = baseName;
+            var suffix = 2;
+            while (!usedStyleNames.Add(candidate))
+            {
+                candidate = baseName + suffix.ToString(CultureInfo.InvariantCulture);
+                suffix++;
+            }
+
+            return candidate;
+        }
+
+        private static string ResolveFontSize(PluginOptions options, int scriptHeight, int percent)
+        {
+            return SubtitleStyleFormatter.ScaleFontSizeFrom1080(options.CommonFontSize, scriptHeight, percent)
+                .ToString("0.##", CultureInfo.InvariantCulture);
         }
 
         private static bool IsBold(SubtitleFontStyle fontStyle)

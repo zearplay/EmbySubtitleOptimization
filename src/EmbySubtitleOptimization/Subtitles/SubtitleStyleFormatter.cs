@@ -24,10 +24,9 @@ namespace EmbySubtitleOptimization.Subtitles
             string text,
             ResolutionProfile profile,
             PluginOptions options,
-            string singleFontName = null,
-            double? styleFontSize = null)
+            string singleFontName = null)
         {
-            return FormatAndOptimizeWithLayout(text, profile, options, singleFontName, styleFontSize).Text;
+            return FormatAndOptimizeWithLayout(text, profile, options, singleFontName, profile.Height).Text;
         }
 
         internal static FormattedSubtitle FormatAndOptimizeWithLayout(
@@ -35,13 +34,18 @@ namespace EmbySubtitleOptimization.Subtitles
             ResolutionProfile profile,
             PluginOptions options,
             string singleFontName = null,
-            double? styleFontSize = null)
+            int fontSizeCanvasHeight = 0)
         {
             var sanitizedText = RemoveConfigurableInlineTags(RemoveForbiddenInlineTags(text));
-            var inheritedFontSize = styleFontSize > 0 ? styleFontSize.Value : profile.FontSize;
-            var baseFontSize = options.CommonFontSize > 0 ? options.CommonFontSize : inheritedFontSize;
-            var primaryFontSize = ScaleFontSize(baseFontSize, options.PrimaryFontSizePercent);
-            var secondaryFontSize = ScaleFontSize(baseFontSize, options.SecondaryFontSizePercent);
+            var canvasHeight = fontSizeCanvasHeight > 0 ? fontSizeCanvasHeight : profile.Height;
+            var primaryFontSize = ScaleFontSizeFrom1080(
+                options.CommonFontSize,
+                canvasHeight,
+                options.PrimaryFontSizePercent);
+            var secondaryFontSize = ScaleFontSizeFrom1080(
+                options.CommonFontSize,
+                canvasHeight,
+                options.SecondaryFontSizePercent);
             if (string.IsNullOrWhiteSpace(sanitizedText))
             {
                 return FormattedSubtitle.Single(sanitizedText);
@@ -53,7 +57,6 @@ namespace EmbySubtitleOptimization.Subtitles
                     options.PrimarySubtitleColor,
                     options.PrimaryFontStyle,
                     options.PrimaryFontName,
-                    primaryFontSize,
                     options.PrimaryCharacterSpacing,
                     options.PrimaryBorderEnabled,
                     options.PrimaryBorderWidth,
@@ -72,7 +75,6 @@ namespace EmbySubtitleOptimization.Subtitles
                     options.PrimarySubtitleColor,
                     options.PrimaryFontStyle,
                     fontName,
-                    primaryFontSize,
                     options.PrimaryCharacterSpacing,
                     options.PrimaryBorderEnabled,
                     options.PrimaryBorderWidth,
@@ -85,7 +87,6 @@ namespace EmbySubtitleOptimization.Subtitles
                 options.PrimarySubtitleColor,
                 options.PrimaryFontStyle,
                 options.PrimaryFontName,
-                primaryFontSize,
                 options.PrimaryCharacterSpacing,
                 options.PrimaryBorderEnabled,
                 options.PrimaryBorderWidth,
@@ -94,7 +95,6 @@ namespace EmbySubtitleOptimization.Subtitles
                 options.SecondarySubtitleColor,
                 options.SecondaryFontStyle,
                 options.SecondaryFontName,
-                secondaryFontSize,
                 options.SecondaryCharacterSpacing,
                 options.SecondaryBorderEnabled,
                 options.SecondaryBorderWidth,
@@ -106,7 +106,7 @@ namespace EmbySubtitleOptimization.Subtitles
             var bilingualText = optimizedPrimary + "\\N" + optimizedSecondary;
             var optimized = Optimize(bilingualText, profile, options);
             return FormattedSubtitle.Bilingual(
-                InsertBilingualGap(optimized, secondaryOverride, profile, options.BilingualLineSpacing),
+                optimized,
                 optimizedPrimary,
                 optimizedSecondary,
                 primaryFontSize,
@@ -160,24 +160,10 @@ namespace EmbySubtitleOptimization.Subtitles
             });
         }
 
-        internal static string NormalizeInlineFontSize(string text, double styleFontSize)
-        {
-            if (string.IsNullOrEmpty(text)) return text;
-            var replacement = "\\fs" + styleFontSize.ToString("0.##", CultureInfo.InvariantCulture);
-            var inherited = AssOverrideBlockRegex.Replace(text, match =>
-            {
-                var tags = InlineFontSizeRegex.Replace(match.Groups["tags"].Value, string.Empty);
-                tags = InlineStyleResetRegex.Replace(tags, reset => reset.Value + replacement);
-                return tags.Length == 0 ? string.Empty : "{" + tags + "}";
-            });
-            return "{" + replacement + "}" + inherited;
-        }
-
         internal static string BuildOverride(
             string htmlColor,
             SubtitleFontStyle fontStyle,
             string fontName,
-            double fontSize,
             double characterSpacing,
             bool borderEnabled,
             double borderWidth,
@@ -188,10 +174,9 @@ namespace EmbySubtitleOptimization.Subtitles
             var italic = fontStyle == SubtitleFontStyle.Italic || fontStyle == SubtitleFontStyle.BoldItalic ? 1 : 0;
             var safeFontName = Regex.Replace(fontName ?? "Arial", @"[{}\\]", string.Empty).Trim();
             if (safeFontName.Length == 0) safeFontName = "Arial";
-            var size = fontSize.ToString("0.##", CultureInfo.InvariantCulture);
             var spacing = characterSpacing.ToString("0.##", CultureInfo.InvariantCulture);
             var borderTags = BuildBorderTags(borderEnabled, borderWidth, borderColor);
-            return "{\\fn" + safeFontName + "\\fs" + size + "\\fsp" + spacing + "\\c&H" + assColor + "&\\alpha&H" + assAlpha + "&\\b" + bold + "\\i" + italic + borderTags + "}";
+            return "{\\fn" + safeFontName + "\\fsp" + spacing + "\\c&H" + assColor + "&\\alpha&H" + assAlpha + "&\\b" + bold + "\\i" + italic + borderTags + "}";
         }
 
         private static string BuildBorderTags(bool borderEnabled, double borderWidth, string borderColor)
@@ -207,33 +192,18 @@ namespace EmbySubtitleOptimization.Subtitles
             return TextLayout.OptimizeAssText(text, profile.MaxLineWidth);
         }
 
-        private static double ScaleFontSize(double styleFontSize, int percent)
+        internal static double ScaleFontSizeFrom1080(double fontSize, int canvasHeight)
         {
-            return Math.Max(1, Math.Round(styleFontSize * percent / 100.0, 2));
+            return ScaleFontSizeFrom1080(fontSize, canvasHeight, 100);
         }
 
-        private static string InsertBilingualGap(string text, string secondaryOverride, ResolutionProfile profile, int referenceGap)
+        internal static double ScaleFontSizeFrom1080(double fontSize, int canvasHeight, int percent)
         {
-            if (referenceGap <= 0)
-            {
-                return text;
-            }
-
-            var secondaryIndex = text.IndexOf(secondaryOverride, StringComparison.Ordinal);
-            if (secondaryIndex < 0)
-            {
-                return text;
-            }
-
-            var separatorIndex = text.LastIndexOf("\\N", secondaryIndex, StringComparison.Ordinal);
-            if (separatorIndex < 0)
-            {
-                return text;
-            }
-
-            var scaledGap = Math.Max(1, (int)Math.Round(referenceGap * profile.Height / 1080.0));
-            var spacer = "\\N{\\fs" + scaledGap.ToString(CultureInfo.InvariantCulture) + "}\\h{\\r}\\N";
-            return text.Substring(0, separatorIndex) + spacer + text.Substring(separatorIndex + 2);
+            return Math.Max(
+                1,
+                Math.Round(
+                    fontSize * Math.Max(1, canvasHeight) / 1080.0 * percent / 100.0,
+                    MidpointRounding.AwayFromZero));
         }
 
         private static string ToAssColor(string htmlColor, out string assAlpha)

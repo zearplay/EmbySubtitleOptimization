@@ -4,13 +4,12 @@ namespace EmbySubtitleOptimization.Subtitles
 {
     internal sealed class ResolutionProfile
     {
-        private ResolutionProfile(string name, int width, int height, int maxLineWidth, int fontSize, int marginV)
+        private ResolutionProfile(string name, int width, int height, int maxLineWidth, int marginV)
         {
             Name = name;
             Width = width;
             Height = height;
             MaxLineWidth = maxLineWidth;
-            FontSize = fontSize;
             MarginV = marginV;
         }
 
@@ -18,7 +17,6 @@ namespace EmbySubtitleOptimization.Subtitles
         public int Width { get; }
         public int Height { get; }
         public int MaxLineWidth { get; }
-        public int FontSize { get; }
         public int MarginV { get; }
 
         public int ScaleVerticalFrom1080(int value)
@@ -34,15 +32,15 @@ namespace EmbySubtitleOptimization.Subtitles
 
             if (resolvedHeight > 1600 || resolvedWidth > 2800)
             {
-                return new ResolutionProfile("4K", resolvedWidth, resolvedHeight, maxLineWidth, 84, 120);
+                return new ResolutionProfile("4K", resolvedWidth, resolvedHeight, maxLineWidth, 120);
             }
 
             if (resolvedHeight > 1080 || resolvedWidth > 1920)
             {
-                return new ResolutionProfile("2K", resolvedWidth, resolvedHeight, maxLineWidth, 60, 80);
+                return new ResolutionProfile("2K", resolvedWidth, resolvedHeight, maxLineWidth, 80);
             }
 
-            return new ResolutionProfile("1080p", resolvedWidth, resolvedHeight, maxLineWidth, 46, 60);
+            return new ResolutionProfile("1080p", resolvedWidth, resolvedHeight, maxLineWidth, 60);
         }
 
         internal static int CalculateMaxLineWidth(int screenWidth, int screenHeight, int baseLineWidth)
